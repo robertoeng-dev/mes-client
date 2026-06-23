@@ -1,0 +1,76 @@
+# ==============================================================================
+# .gitignore — MES Client
+# ==============================================================================
+
+# --- Segurança: NUNCA commitar ---
+.env
+*.env.local
+*.env.production
+
+# config.yaml tem dados reais de estação (IP, senhas, station ID)
+# cada máquina gera o seu próprio via instalador — use config.example.yaml como referência
+config.yaml
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- PyInstaller ---
+*.spec.bak
+build/
+dist/
+
+# --- Dados de runtime (gerados em execução) ---
+offsets.json
+offline_queue.jsonl
+logs/
+*.log
+
+# --- IDE ---
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# --- Windows ---
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# --- Inno Setup output (distribuir como GitHub Release, não no repositório) ---
+installer/Output/
+installer/MES_Client_v1.0/
+installer/MES_Client_v1.0_Installer.zip
+
+# --- Estado de runtime ---
+state/*.json
+state/*.jsonl
+*.lock
+
+# --- Documentação gerada ---
+MES_Client_Documentacao_Oficial.docx
+
+# --- Assets gerados automaticamente ---
+assets/installer_banner.bmp
+assets/installer_header.bmp
+assets/app.ico
+
+# --- Banco local de teste ---
+*.sqlite
+*.db
+
+# --- Claude Code ---
+.claude/

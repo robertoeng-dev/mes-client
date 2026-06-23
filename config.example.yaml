@@ -1,0 +1,45 @@
+# config.example.yaml — Modelo de configuração do MES Client
+#
+# Copie este arquivo para config.yaml e ajuste para cada estação.
+# O instalador (MES_Client_Setup.iss) gera o config.yaml automaticamente.
+#
+# ATENÇÃO: config.yaml NÃO deve ser commitado no git (está no .gitignore).
+#          Ele contém dados específicos de cada estação de teste.
+
+database:
+  enabled: true
+  host: 192.168.1.100          # IP do servidor PostgreSQL
+  port: 5432
+  name: mes_db
+  user: mes_user
+  password: ${MES_DB_PASSWORD} # Definido no arquivo .env (NUNCA hardcoded)
+  table: mes_test_results
+
+station:
+  id: PCM_A06_BR-PCMTEST-01    # Formato: {tipo}_{modelo}_BR-PCMTEST-{num}
+  type: PCM_TESTER              # PCM_TESTER ou CYG_TESTER
+  model: A06                   # Modelo do produto (A06, A17, A16...)
+  line: NAVAJO                 # Linha de produção
+
+log:
+  folder: D:\Testpad\CSV\A06   # Pasta onde o equipamento gera os CSVs
+  recursive: true
+
+operation:
+  mode: both                   # "database" | "sync" | "both"
+
+sync:
+  enabled: true
+  destination_folder: \\192.168.1.100\MES\logs\A06   # Samba share de destino
+  mode: diff                   # "diff" (só o que mudou) | "copy" | "sync"
+
+parser:
+  scan_interval: 5             # Intervalo de varredura em segundos
+
+spec_check:
+  enabled: true
+  file: spec_limits.csv        # Limites LSL/USL por modelo e passo de teste
+
+auth:
+  operador_password: ""        # Vazio = OPERADOR sem senha
+  engenharia_password: "admin" # Senha para ações restritas (editar config, parar, sair)

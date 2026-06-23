@@ -1,0 +1,5 @@
+enabled,model,step_key,step_name,unit,lsl,usl
+1,A16,PACK,PACK Voltage,V,3.75,3.85
+1,A16,CELL,CELL Voltage,V,0,0
+1,A16,SLEEP,Sleep Power,μA,0.01,1
+1,A16,CONS,Static Power,μA,0.1,8
