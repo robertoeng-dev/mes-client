@@ -255,6 +255,14 @@ Veja o [Guia de Deploy](docs/DEPLOY.md) para o procedimento completo de homologa
 
 ---
 
+## Documentação Técnica
+
+| Documento | Descrição |
+|---|---|
+| [Suporte a Múltiplos Formatos de CSV](docs/CSV_FORMATS.md) | Como o sistema aceita qualquer CSV sem alterar o banco; como adicionar novos modelos/estações |
+
+---
+
 ## Desenvolvimento
 
 ### Próximas Etapas (Roadmap)
