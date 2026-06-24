@@ -218,13 +218,12 @@ class MESClientUI:
     def _bring_to_front(self, win):
         """Força janela ao primeiro plano mesmo com app em background.
 
-        Dois problemas comuns no .exe compilado (console=False):
-        1. Após fechar o popup do tray, GetForegroundWindow() pode retornar 0
-           (sem janela ativa) — a versão anterior ignorava esse caso e não chamava
-           SetForegroundWindow, deixando o diálogo sem foco do SO.
-        2. Windows bloqueia SetForegroundWindow para processos sem foreground
-           permission. A simulação de ALT (keybd_event) concede essa permissão
-           temporariamente — técnica documentada e amplamente usada.
+        Problema no .exe compilado (console=False): Windows bloqueia
+        SetForegroundWindow para processos em background (foreground lock).
+        Desabilitamos o lock temporariamente via SPI_SETFOREGROUNDLOCKTIMEOUT=0
+        — a única forma 100% confiável no Windows 10/11.
+        O AttachThreadInput foi removido: ao sincronizar com a thread do processo
+        que tem o foco (ex. Explorer), pode bloquear o event loop do Tkinter.
         """
         try:
             win.update_idletasks()
@@ -232,37 +231,26 @@ class MESClientUI:
             if not hwnd:
                 return
 
-            user32   = ctypes.windll.user32
-            kernel32 = ctypes.windll.kernel32
+            user32 = ctypes.windll.user32
 
-            # Simula ALT press/release → Windows concede foreground permission ao processo.
-            # Sem isso, SetForegroundWindow é ignorado silenciosamente quando outro processo
-            # (ou o próprio shell) tem o foco — comportamento padrão desde Windows XP SP1.
-            VK_MENU        = 0x12
-            KEYEVENTF_KEYUP = 0x0002
-            user32.keybd_event(VK_MENU, 0, 0, 0)
-            user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+            # Desabilita o foreground lock temporariamente.
+            # Por padrão timeout > 0 → SetForegroundWindow bloqueado para
+            # processos em background. Com timeout = 0 → qualquer processo
+            # pode chamar SetForegroundWindow sem restrições.
+            SPI_GET = 0x2000  # SPI_GETFOREGROUNDLOCKTIMEOUT
+            SPI_SET = 0x2001  # SPI_SETFOREGROUNDLOCKTIMEOUT
+            old_timeout = ctypes.c_uint(0)
+            user32.SystemParametersInfoW(SPI_GET, 0, ctypes.byref(old_timeout), 0)
+            user32.SystemParametersInfoW(SPI_SET, 0, None, 0)  # timeout = 0ms
 
-            fg_hwnd  = user32.GetForegroundWindow()
-            our_tid  = kernel32.GetCurrentThreadId()
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE — garante não minimizado
 
-            if fg_hwnd and fg_hwnd != hwnd:
-                fg_tid = user32.GetWindowThreadProcessId(fg_hwnd, None)
-                if fg_tid and fg_tid != our_tid:
-                    user32.AttachThreadInput(our_tid, fg_tid, True)
-                    user32.BringWindowToTop(hwnd)
-                    user32.SetForegroundWindow(hwnd)
-                    user32.AttachThreadInput(our_tid, fg_tid, False)
-                else:
-                    user32.BringWindowToTop(hwnd)
-                    user32.SetForegroundWindow(hwnd)
-            else:
-                # fg_hwnd == 0: nenhuma janela ativa (popup recém-fechado).
-                # Chama SetForegroundWindow diretamente — sem AttachThreadInput necessário.
-                user32.BringWindowToTop(hwnd)
-                user32.SetForegroundWindow(hwnd)
-
-            user32.ShowWindow(hwnd, 9)  # SW_RESTORE — garante que não está minimizado
+            # Restaura o timeout original
+            user32.SystemParametersInfoW(
+                SPI_SET, 0, ctypes.c_void_p(old_timeout.value), 0
+            )
         except Exception:
             pass
 
@@ -570,9 +558,16 @@ class MESClientUI:
                 sym_lbl.configure(fg=FG_DIM)
 
             def on_click(e):
-                self._close_tray_popup_win()
                 if cb:
                     cb()
+                # Fecha o popup APÓS a ação ser agendada (after(0) do cb).
+                # Isso garante que qualquer diálogo criado pelo cb (ex: ACESSO
+                # RESTRITO para STOP/EXIT) seja aberto enquanto o popup ainda
+                # é o foreground window do processo. O diálogo herda o foco
+                # naturalmente e dlg.grab_set() substitui o grab do popup.
+                # Sem esse atraso, popup.destroy() transfere o foreground para
+                # outro processo antes do diálogo aparecer → Entry sem teclado.
+                self.root.after(10, self._close_tray_popup_win)
                 return "break"  # impede propagação ao <Button-1> do popup
 
             for w in widgets:

@@ -20,8 +20,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - **PCM Tester serial**: mantido como composição fixa (`_pcm_serial`) por ser protocolo do equipamento; todos os outros campos (resultado, tempo) agora usam o mapper configurável
 
 ### Corrigido
-- **Tela ACESSO RESTRITO não recebia teclado no .exe compilado** (STOP e EXIT): após o popup do tray ser destruído, `GetForegroundWindow()` retorna 0 e o código anterior pulava o `SetForegroundWindow` inteiramente; corrigido tratando `fg_hwnd == 0` como caminho válido + adicionado "ALT trick" (`keybd_event`) que concede foreground permission ao processo (obrigatório para `console=False` no PyInstaller)
-- **Retry de foco**: `_check_role` agora reaplica `_bring_to_front` + `focus_set` 120 ms após o primeiro `grab_set`, eliminando o caso de race condition onde o shell roubava o foco depois do `popup.destroy()`
+- **Tela ACESSO RESTRITO não recebia teclado no .exe compilado** (STOP e EXIT): raiz do problema era o `popup.destroy()` acontecer *antes* de criar o auth dialog — o Windows transferia o foreground para outra aplicação antes de `_check_role` ser chamado; corrigido invertendo a ordem no `on_click`: `cb()` é chamado primeiro (agenda o auth dialog via `after(0)`), popup fecha via `after(10)` — auth dialog é criado enquanto popup ainda é o foreground do nosso processo
+- **`_bring_to_front` refatorado**: removido `AttachThreadInput` (podia bloquear o event loop do Tkinter ao sincronizar com a thread da janela em foco, ex. VS Code); substituído por `SPI_SETFOREGROUNDLOCKTIMEOUT=0` temporário — abordagem documentada e sem risco de deadlock
+- **Retry de foco**: `_check_role` reaplica `_bring_to_front` + `focus_set` 120 ms após o primeiro `grab_set`, cobrindo edge cases de timing
 
 ### Documentação
 - `docs/CSV_FORMATS.md` atualizado: seção "Como adicionar suporte" reescrita para refletir fluxo sem código; nova seção sobre `column_mappings.json`
