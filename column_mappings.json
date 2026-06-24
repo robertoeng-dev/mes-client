@@ -1,0 +1,9 @@
+{
+  "DEFAULT": {
+    "serial_number":   ["SerialNumber", "serial_number", "barcode", "device_name"],
+    "result_status":   ["test_result", "Test PASS/FAIL STATUS", "Result"],
+    "model_name":      ["Model", "model", "proj_code"],
+    "test_start_time": ["test_time", "Test Start Time"],
+    "test_stop_time":  ["Test Stop Time", "stop_time"]
+  }
+}

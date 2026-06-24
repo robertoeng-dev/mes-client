@@ -47,7 +47,8 @@ Gera CSV de teste → Monitor detecta → Parser lê → DB Writer → PostgreSQ
 | **File Sync** | Sincronização para servidor de rede (modos: diff, copy, sync) |
 | **Spec Check** | Validação de limites LSL/USL contra `spec_limits.csv` |
 | **Buffer** | Fila offline em JSONL — reprocessamento automático ao reconectar |
-| **UI** | System tray + janelas modais (Status, Config, Limites, Ajuda) |
+| **UI** | System tray + janelas modais (Status, Config, Limites, Mapeamento, Ajuda) |
+| **Mapeamento** | Editor de `column_mappings.json`: mapeia colunas CSV para campos do banco por modelo, sem abrir código |
 | **Auth** | Dois perfis: OPERADOR (visualização) e ENGENHARIA (edição completa) |
 | **Installer** | Instalador profissional Inno Setup com wizard de configuração por estação |
 
@@ -77,7 +78,8 @@ MES_Client_Complete/
 │   ├── offset_manager.py   # Controle de posição de leitura por arquivo
 │   └── app_context.py      # Singleton de contexto da aplicação
 ├── config/
-│   └── loader.py           # Carregamento de config.yaml com suporte a variáveis ${ENV}
+│   ├── loader.py           # Carregamento de config.yaml com suporte a variáveis ${ENV}
+│   └── column_mapper.py    # Resolução de campos CSV via column_mappings.json
 ├── logs/
 │   └── logger_setup.py     # RotatingFileHandler, log estruturado
 ├── installer/
@@ -92,6 +94,7 @@ MES_Client_Complete/
 │   └── installer_header.bmp           # Header dark das páginas internas
 ├── config.yaml             # Configuração da estação (gerado pelo instalador)
 ├── spec_limits.csv         # Limites LSL/USL por modelo e passo de teste
+├── column_mappings.json    # Mapeamento colunas CSV → campos do banco (editável via UI)
 ├── parser_TE.spec          # Spec PyInstaller para compilar o EXE
 └── requirements.txt        # Dependências Python
 ```
@@ -220,6 +223,7 @@ Após a instalação, o MES Client inicia automaticamente com o Windows (Task Sc
 | Ver STATUS | ✅ | ✅ |
 | Editar CONFIG | ❌ (requer senha) | ✅ |
 | Editar LIMITES | ❌ (requer senha) | ✅ |
+| Editar MAPEAMENTO | ❌ (requer senha) | ✅ |
 | STOP / EXIT | ❌ (requer senha) | ✅ |
 
 ---

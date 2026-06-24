@@ -105,98 +105,81 @@ Um CSV do modelo A06 com 45 colunas e um do A17 com 60 colunas geram hashes dife
 
 ## O que pode resultar em NULL (e como corrigir)
 
-Alguns campos estruturados são **extraídos por nome de coluna**. Se o CSV usar nomes fora das listas abaixo, o campo extrai como `NULL` — mas o dado completo **ainda está em `row_data`**, sem perda.
+Alguns campos estruturados são **extraídos por nome de coluna**. Se o CSV usar nomes não configurados, o campo fica `NULL` — mas o dado completo **ainda está em `row_data`**, sem perda.
 
-### Campos extraídos e nomes reconhecidos
+### Campos estruturados e suas prioridades de resolução
 
-**`serial_number`** — `monitor/file_monitor.py:_resolve_serial_or_trace()`
+| Campo no banco | Prioridade 1 | Prioridade 2 | Prioridade 3 |
+|---|---|---|---|
+| `serial_number` | Mapeamento do modelo em `column_mappings.json` | Mapeamento DEFAULT | NULL (PCM_TESTER usa chave composta — ver nota) |
+| `result_status` | Mapeamento do modelo | Mapeamento DEFAULT | NULL |
+| `model_name` | Nome do arquivo (ex: `CYG_A17_20260622.csv` → A17) | Mapeamento DEFAULT | `station.model` do `config.yaml` |
+| `test_start_time` | Mapeamento do modelo | Mapeamento DEFAULT | NULL |
+| `test_stop_time` | Mapeamento do modelo | Mapeamento DEFAULT | NULL |
 
-```python
-# PCM_TESTER: compõe chave composta (não tem serial único)
-f"{machine_no}|CH{channel_no}|{device_name}|{test_time}"
+> **Nota PCM_TESTER:** o serial é composto automaticamente por `_pcm_serial()` em `file_monitor.py`
+> como `machine_no|CH{channel_no}|device_name|test_time` — protocolo fixo do equipamento.
 
-# CYG / outros:
-row.get("SerialNumber")
-or row.get("serial_number")
-or row.get("barcode")
-or row.get("device_name")
+---
+
+## `column_mappings.json` — mapeamento configurável
+
+O arquivo `column_mappings.json` define, para cada modelo (ou `DEFAULT`), quais colunas do CSV
+correspondem a cada campo estruturado. É editado pela tela **MAPEAMENTO** na UI, sem abrir código.
+
+```json
+{
+  "DEFAULT": {
+    "serial_number":   ["SerialNumber", "serial_number", "barcode", "device_name"],
+    "result_status":   ["test_result", "Test PASS/FAIL STATUS", "Result"],
+    "model_name":      ["Model", "model", "proj_code"],
+    "test_start_time": ["test_time", "Test Start Time"],
+    "test_stop_time":  ["Test Stop Time", "stop_time"]
+  },
+  "X30": {
+    "serial_number":  ["TraceID"],
+    "result_status":  ["FinalResult"],
+    "test_start_time":["StartTimestamp"]
+  }
+}
 ```
 
-**`result_status`** — `_resolve_result()`
+**Prioridade de resolução para cada linha:**
+1. Procura no mapeamento do modelo específico (ex: `"X30"`)
+2. Se não encontrar, usa `"DEFAULT"`
+3. Retorna `NULL` se nenhuma coluna da lista existir na linha
 
-```python
-# PCM_TESTER:
-row.get("test_result")
-
-# CYG / outros:
-row.get("Test PASS/FAIL STATUS")
-or row.get("test_result")
-or row.get("Result")
-```
-
-**`model_name`** — `_resolve_model_name()`
-
-```python
-# 1ª prioridade: nome do arquivo (ex: CYG_X30_20260622.csv → "X30")
-# 2ª prioridade: coluna da linha
-row.get("Model") or row.get("model") or row.get("proj_code")
-# 3ª prioridade: station.model do config.yaml
-```
-
-**`test_start_time`** — `_resolve_test_start()`
-
-```python
-row.get("test_time")          # PCM_TESTER
-or row.get("Test Start Time") # CYG
-```
+O monitor recarrega o JSON **a cada ciclo de scan** — nenhum restart necessário após salvar.
 
 ---
 
 ## Como adicionar suporte a um novo formato
 
-### Caso 1 — Mesmo tipo de testador, coluna com nome diferente
+### Caso 1 — Mesmo equipamento, novo modelo com colunas diferentes
 
-Edite apenas `monitor/file_monitor.py`. Adicione o novo nome como fallback:
+**Sem abrir código.** Abra o popup do tray → **MAPEAMENTO** → EDITAR → ADICIONAR:
 
-```python
-# Exemplo: novo modelo usa "SN" no lugar de "SerialNumber"
-def _resolve_serial_or_trace(row, station_type):
-    ...
-    return (
-        row.get("SerialNumber")
-        or row.get("serial_number")
-        or row.get("barcode")
-        or row.get("device_name")
-        or row.get("SN")           # ← adiciona aqui
-    )
+```
+Modelo:          X30
+Campo MES:       Serial / Rastreio
+Colunas no CSV:  TraceID, SN_PROD
 ```
 
-**Não muda o banco. Não muda o parser. Não muda o config.yaml.**
+Clique SALVAR. Na próxima varredura, o campo `serial_number` será extraído corretamente do modelo X30.
 
 ### Caso 2 — Novo tipo de testador com estrutura própria
 
-**Passo 1:** adicione o novo tipo no `config.yaml` de cada estação desse tipo:
+**Passo 1:** defina o tipo no `config.yaml` da estação:
 
 ```yaml
 station:
-  type: NOVO_TESTER   # nome que você escolher
+  type: NOVO_TESTER
 ```
 
-**Passo 2:** adicione um bloco nas funções `_resolve_*` em `file_monitor.py`:
+**Passo 2 (sem código):** configure os mapeamentos de colunas pela tela MAPEAMENTO para cada campo.
 
-```python
-def _resolve_serial_or_trace(row, station_type):
-    if station_type == "NOVO_TESTER":
-        return row.get("TraceID") or row.get("SN_PROD")
-    ...
-
-def _resolve_result(row, station_type):
-    if station_type == "NOVO_TESTER":
-        return _normalize_result(row.get("FinalResult"))
-    ...
-```
-
-**Passo 3 (opcional):** se a estrutura de cabeçalho for diferente (linhas de metadados em posições diferentes), adicione a detecção em `parser/cyg_parser.py:detect_csv_format()`:
+**Passo 3 (somente se a estrutura de cabeçalho for diferente):** se o CSV tiver linhas de metadados em
+posições diferentes das do CYG, adicione detecção em `parser/cyg_parser.py:detect_csv_format()`:
 
 ```python
 def detect_csv_format(second_line_values, station_type="AUTO"):
@@ -209,9 +192,10 @@ E o tratamento correspondente em `read_header_and_meta()`.
 
 ### Caso 3 — CSV sem linha de limites (só cabeçalho + dados)
 
-Defina `station_type: AUTO` e o sistema detecta automaticamente. Se a segunda linha não contém padrão `[número-número]`, trata como CYG: assume que linha 2 é USL, linha 3 é LSL, linha 4 é unidades — e se essas linhas forem dados reais, os limites ficarão incorretos no catálogo, mas **o INSERT dos dados funciona normalmente**.
+Defina `station_type: AUTO` e o sistema detecta automaticamente. Se a segunda linha não contém padrão
+`[número-número]`, trata como CYG: assume que linha 2 é USL, linha 3 é LSL, linha 4 é unidades.
 
-Para evitar isso, force o tipo: `station_type: CYG` pula as linhas de metadados mesmo sem conteúdo válido nelas.
+Para evitar confusão: force `station_type: CYG`.
 
 ---
 
@@ -282,7 +266,9 @@ WHERE a.model_name = 'A06' AND b.model_name = 'A17';
 | Arquivo | Responsabilidade |
 |---|---|
 | `parser/cyg_parser.py` | Leitura incremental, detecção de formato, extração de cabeçalhos/limites |
-| `monitor/file_monitor.py` | Funções `_resolve_*`, montagem do batch, schema_hash |
+| `monitor/file_monitor.py` | Montagem do batch, `_pcm_serial`, `schema_hash`, integração com column_mapper |
+| `config/column_mapper.py` | `load_mappings`, `resolve_field`, `detect_unmapped_fields` |
+| `column_mappings.json` | Mapeamento de colunas CSV → campos estruturados (editável via UI MAPEAMENTO) |
 | `database/db_writer.py` | `upsert_schema()`, `insert_rows()`, schema do banco |
 | `spec/spec_validator.py` | Validação de limites LSL/USL por modelo |
 | `config.yaml` → `station.type` | Força o formato em vez de detectar automaticamente |

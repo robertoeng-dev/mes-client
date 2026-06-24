@@ -126,11 +126,12 @@ class MESClientUI:
 
         # Referências às janelas abertas. None = fechada. Verificar .winfo_exists()
         # antes de usar — Tkinter não zera a referência quando a janela é destruída.
-        self.about_window  = None
-        self.config_window = None
-        self.status_window = None
-        self.limites_window = None
-        self.ajuda_window   = None
+        self.about_window      = None
+        self.config_window     = None
+        self.status_window     = None
+        self.limites_window    = None
+        self.mapeamento_window = None
+        self.ajuda_window      = None
         self.active_window  = None   # janela modal atualmente ativa (só uma por vez)
         self.auth_dialog    = None   # diálogo de autenticação (_check_role); pausa o focus lock
 
@@ -555,11 +556,12 @@ class MESClientUI:
         add_item("START",        self.start_clicked,  symbol="▶")
         add_item("STOP",         self.stop_clicked,   symbol="⏹")
         add_sep()
-        add_item("STATUS",       self.status_clicked, symbol="◉")
-        add_item("CONFIGURAÇÃO", self.config_clicked, symbol="⚙")
-        add_item("LIMITES",      self.limites_clicked,symbol="◈")
+        add_item("STATUS",       self.status_clicked,    symbol="◉")
+        add_item("CONFIGURAÇÃO", self.config_clicked,    symbol="⚙")
+        add_item("LIMITES",      self.limites_clicked,   symbol="◈")
+        add_item("MAPEAMENTO",   self.mapeamento_clicked,symbol="⇄")
         add_sep()
-        add_item("AJUDA",        self.ajuda_clicked,  symbol="?")
+        add_item("AJUDA",        self.ajuda_clicked,     symbol="?")
         add_item("ABOUT",        self.about_clicked,  symbol="ⓘ")
         add_sep()
         add_item("EXIT",         self.exit_clicked,   symbol="✕", fg_color=FG_EXIT)
@@ -1679,6 +1681,7 @@ class MESClientUI:
             item_row("STATUS",       "Abre a tela de status em tempo real da estação.")
             item_row("CONFIGURAÇÃO", "Abre as configurações do sistema (pasta, banco, sync…)")
             item_row("LIMITES",      "Editor de limites LSL/USL por passo de teste.")
+            item_row("MAPEAMENTO",   "Define quais colunas do CSV correspondem a cada campo do banco.")
             item_row("AJUDA",        "Este manual (também disponível pela tecla F1).")
             item_row("ABOUT",        "Versão do software e informações do sistema.")
             item_row("EXIT",         "Encerra o aplicativo. Requer senha de ENGENHARIA.")
@@ -1732,14 +1735,38 @@ class MESClientUI:
             separator()
 
             # ══════════════════════════════════════════════════════════════
+            # SEÇÃO: Tela MAPEAMENTO
+            # ══════════════════════════════════════════════════════════════
+            sec_title("Tela MAPEAMENTO", "⇄")
+            body(
+                "Editor do arquivo column_mappings.json. Define quais colunas do CSV "
+                "correspondem a cada campo estruturado do banco (serial, resultado, tempo...). "
+                "Permite adicionar suporte a novos modelos ou equipamentos sem abrir código fonte."
+            )
+            item_row("Modelo",          "Nome do modelo (ex: A17) ou DEFAULT para todos.")
+            item_row("Campo MES",       "Campo estruturado do banco: Serial, Resultado, Modelo, Tempo de Início/Fim.")
+            item_row("Colunas no CSV",  "Nomes das colunas do CSV a tentar, em ordem de prioridade.")
+            body(
+                "Prioridade de resolução: 1º mapeamento do modelo específico, "
+                "2º DEFAULT, 3º NULL (dado completo ainda disponível em row_data JSONB)."
+            )
+            body(
+                "Nota: o serial do PCM Tester é composto automaticamente pelo sistema "
+                "(machine_no|CH{channel_no}|device_name|test_time) — formato do equipamento."
+            )
+            body("Duplo clique em uma linha (modo EDITAR) para editar. Alterações entram em vigor no próximo ciclo do monitor.")
+            separator()
+
+            # ══════════════════════════════════════════════════════════════
             # SEÇÃO: Arquivos de configuração
             # ══════════════════════════════════════════════════════════════
             sec_title("Arquivos de Configuração", "📄")
-            body("Dois arquivos controlam o comportamento do sistema:")
-            item_row("config.yaml",     "Parâmetros da estação, banco, pastas, sync e senhas de perfil.")
-            item_row(".env",            "Senha do banco de dados (MES_DB_PASSWORD). Nunca editar no config.yaml)")
-            item_row("spec_limits.csv", "Tabela de limites LSL/USL por passo de teste.")
-            item_row("offsets.json",    "Posição de leitura de cada CSV (controle de progresso).")
+            body("Arquivos que controlam o comportamento do sistema:")
+            item_row("config.yaml",         "Parâmetros da estação, banco, pastas, sync e senhas de perfil.")
+            item_row(".env",                "Senha do banco de dados (MES_DB_PASSWORD). Nunca editar no config.yaml)")
+            item_row("spec_limits.csv",     "Tabela de limites LSL/USL por passo de teste.")
+            item_row("column_mappings.json","Mapeamento de colunas CSV para campos do banco (editável via MAPEAMENTO).")
+            item_row("offsets.json",        "Posição de leitura de cada CSV (controle de progresso).")
             item_row("offline_queue.jsonl", "Fila de dados para reenvio quando o banco estiver offline.")
             code("MES_DB_PASSWORD=sua_senha_aqui   ← conteúdo do arquivo .env")
             separator()
@@ -2030,6 +2057,315 @@ class MESClientUI:
                 self.limites_window.destroy()
 
             self.limites_window.protocol("WM_DELETE_WINDOW", _on_close)
+            edit_btn.configure(command=edit_clicked)
+            save_btn.configure(command=save_clicked)
+            add_btn.configure(command=add_row)
+            del_btn.configure(command=del_row)
+            close_btn.configure(command=_on_close)
+
+        self.root.after(0, _open)
+
+    # -------------------------------------------------------------------------
+    # TELA MAPEAMENTO — editor de column_mappings.json
+    # Define quais colunas do CSV correspondem a cada campo estruturado do banco.
+    # Usa ttk.Treeview flattened: (Modelo, Campo MES, Colunas CSV).
+    # -------------------------------------------------------------------------
+    def mapeamento_clicked(self, icon=None, item=None):
+        def _open():
+            if not self._try_open_window("MAPEAMENTO"):
+                return
+
+            from config.column_mapper import load_mappings, save_mappings, STRUCTURED_FIELDS
+
+            mappings = load_mappings()
+
+            # Flatten JSON {modelo: {campo: [cols]}} → lista de [modelo, campo, cols_str]
+            rows = []
+            for model_key, fields in mappings.items():
+                for field_key, col_list in fields.items():
+                    if isinstance(col_list, list):
+                        col_str = ", ".join(col_list)
+                    else:
+                        col_str = str(col_list)
+                    rows.append([model_key, field_key, col_str])
+
+            # DEFAULT primeiro, depois ordena por modelo e campo
+            rows.sort(key=lambda r: (0 if r[0] == "DEFAULT" else 1, r[0], r[1]))
+
+            self.mapeamento_window = tk.Toplevel(self.root)
+            _geo, _lw, _lh = self._dynamic_geometry(0.82, 0.70, 960, 520, max_w=1400, max_h=840)
+            self._style_window(self.mapeamento_window, "Mapeamento de Colunas CSV", _geo)
+            self.mapeamento_window.protocol("WM_DELETE_WINDOW", self.mapeamento_window.destroy)
+            self._register_window(self.mapeamento_window)
+
+            tk.Label(self.mapeamento_window, text="MAPEAMENTO DE COLUNAS CSV",
+                     bg=self.bg_main, fg=self.fg_main,
+                     font=("Segoe UI", 16, "bold")).pack(pady=(16, 2))
+            role_lbl = ("ENGENHARIA — edição habilitada"
+                        if self.current_role == "engenharia"
+                        else "OPERADOR — somente visualização")
+            tk.Label(self.mapeamento_window, text=role_lbl,
+                     bg=self.bg_main, fg=self.fg_secondary,
+                     font=("Segoe UI", 9)).pack(pady=(0, 2))
+            tk.Label(self.mapeamento_window,
+                     text="Define quais colunas do CSV correspondem a cada campo do banco. "
+                          "Alterações entram em vigor no próximo ciclo do monitor.",
+                     bg=self.bg_main, fg=self.fg_secondary,
+                     font=("Segoe UI", 9)).pack(pady=(0, 8))
+
+            # ── Treeview ─────────────────────────────────────────────────────
+            style = ttk.Style()
+            style.theme_use("clam")
+            style.configure("Map.Treeview",
+                background=self.bg_card, foreground=self.fg_main,
+                fieldbackground=self.bg_card, rowheight=26,
+                font=("Segoe UI", 10))
+            style.configure("Map.Treeview.Heading",
+                background=self.bg_input, foreground=self.fg_main,
+                font=("Segoe UI", 10, "bold"), relief="flat")
+            style.map("Map.Treeview",
+                background=[("selected", "#3a4a3a")],
+                foreground=[("selected", self.fg_main)])
+
+            tree_frame = tk.Frame(self.mapeamento_window, bg=self.bg_main)
+            tree_frame.pack(fill="both", expand=True, padx=16, pady=(0, 4))
+
+            col_ids     = ("model", "field", "columns")
+            col_headers = ("Modelo", "Campo MES", "Colunas no CSV (separadas por vírgula)")
+            col_widths  = (130, 190, 530)
+            col_anchor  = ("w", "w", "w")
+
+            tree = ttk.Treeview(tree_frame, columns=col_ids, show="headings",
+                                style="Map.Treeview", selectmode="browse")
+            for cid, hdr, w, anc in zip(col_ids, col_headers, col_widths, col_anchor):
+                tree.heading(cid, text=hdr)
+                tree.column(cid, width=w, anchor=anc, minwidth=w)
+
+            vsb = tk.Scrollbar(tree_frame, orient="vertical", command=tree.yview,
+                               bg=self.bg_card, troughcolor=self.bg_main)
+            tree.configure(yscrollcommand=vsb.set)
+            tree.pack(side="left", fill="both", expand=True)
+            vsb.pack(side="right", fill="y")
+
+            is_editing = [False]
+
+            field_options = list(STRUCTURED_FIELDS.keys())
+            field_labels  = [STRUCTURED_FIELDS[k] for k in field_options]
+
+            def _refresh_tree():
+                for item in tree.get_children():
+                    tree.delete(item)
+                for i, row in enumerate(rows):
+                    label = STRUCTURED_FIELDS.get(row[1], row[1])
+                    tree.insert("", "end", iid=str(i), values=(row[0], label, row[2]))
+
+            _refresh_tree()
+
+            # ── Footer ────────────────────────────────────────────────────────
+            footer = tk.Frame(self.mapeamento_window, bg=self.bg_main)
+            footer.pack(fill="x", padx=16, pady=(4, 14))
+
+            edit_btn  = self._make_button(footer, "EDITAR",    None, width=13)
+            save_btn  = self._make_button(footer, "SALVAR",    None, width=13)
+            add_btn   = self._make_button(footer, "ADICIONAR", None, width=13)
+            del_btn   = self._make_button(footer, "DELETAR",   None, width=13)
+            close_btn = self._make_button(footer, "FECHAR",    None, width=13)
+
+            edit_btn.pack(side="left", padx=(0, 6))
+            save_btn.pack(side="left", padx=6)
+            add_btn.pack(side="left",  padx=6)
+            del_btn.pack(side="left",  padx=6)
+            close_btn.pack(side="right")
+
+            save_btn.configure(state="disabled")
+            add_btn.configure(state="disabled")
+            del_btn.configure(state="disabled")
+
+            # ── Diálogo de edição / criação de linha ─────────────────────────
+            def _open_row_dialog(row_data=None, title="Adicionar Mapeamento"):
+                dlg = tk.Toplevel(self.mapeamento_window)
+                dlg.title(title)
+                dlg.configure(bg=self.bg_main)
+                dlg.resizable(False, False)
+                dlg.iconphoto(False, self._window_icon)
+                dlg.transient(self.mapeamento_window)
+
+                if row_data is None:
+                    row_data = ["DEFAULT", "serial_number", ""]
+
+                result = [None]
+
+                # Modelo
+                tk.Label(dlg, text="Modelo  (DEFAULT = todos; ou nome específico, ex: A17)",
+                         bg=self.bg_main, fg=self.fg_secondary,
+                         font=("Segoe UI", 10), anchor="w").grid(
+                         row=0, column=0, padx=(16, 8), pady=(14, 5), sticky="w")
+                model_var = tk.StringVar(value=row_data[0])
+                tk.Entry(dlg, textvariable=model_var, bg=self.bg_input, fg=self.fg_main,
+                         insertbackground=self.fg_main, font=("Segoe UI", 10),
+                         width=32, relief="flat", bd=4).grid(
+                         row=0, column=1, padx=(0, 16), pady=(14, 5), sticky="ew")
+
+                # Campo MES (combobox)
+                tk.Label(dlg, text="Campo MES",
+                         bg=self.bg_main, fg=self.fg_secondary,
+                         font=("Segoe UI", 10), anchor="w").grid(
+                         row=1, column=0, padx=(16, 8), pady=5, sticky="w")
+                field_var = tk.StringVar(value=STRUCTURED_FIELDS.get(row_data[1], row_data[1]))
+                field_combo = ttk.Combobox(dlg, textvariable=field_var, values=field_labels,
+                                           state="readonly", font=("Segoe UI", 10), width=30)
+                field_combo.grid(row=1, column=1, padx=(0, 16), pady=5, sticky="ew")
+
+                # Colunas no CSV
+                tk.Label(dlg, text="Colunas no CSV  (separadas por vírgula)",
+                         bg=self.bg_main, fg=self.fg_secondary,
+                         font=("Segoe UI", 10), anchor="w").grid(
+                         row=2, column=0, padx=(16, 8), pady=5, sticky="w")
+                cols_var = tk.StringVar(value=row_data[2])
+                cols_entry = tk.Entry(dlg, textvariable=cols_var, bg=self.bg_input, fg=self.fg_main,
+                                      insertbackground=self.fg_main, font=("Segoe UI", 10),
+                                      width=44, relief="flat", bd=4)
+                cols_entry.grid(row=2, column=1, padx=(0, 16), pady=5, sticky="ew")
+
+                def on_ok(event=None):
+                    model_val      = model_var.get().strip()
+                    field_lbl_val  = field_var.get().strip()
+                    cols_val       = cols_var.get().strip()
+
+                    if not model_val:
+                        self._dark_msg("Campo obrigatório",
+                                       "Modelo não pode ser vazio.\nUse 'DEFAULT' para todos os modelos.",
+                                       kind="warning", parent=dlg)
+                        return
+                    if not field_lbl_val:
+                        self._dark_msg("Campo obrigatório",
+                                       "Selecione um Campo MES.",
+                                       kind="warning", parent=dlg)
+                        return
+                    if not cols_val:
+                        self._dark_msg("Campo obrigatório",
+                                       "Informe ao menos uma coluna CSV.",
+                                       kind="warning", parent=dlg)
+                        return
+
+                    try:
+                        field_key = field_options[field_labels.index(field_lbl_val)]
+                    except (ValueError, IndexError):
+                        field_key = field_lbl_val
+
+                    result[0] = [model_val, field_key, cols_val]
+                    dlg.destroy()
+
+                cols_entry.bind("<Return>", on_ok)
+                btn_f = tk.Frame(dlg, bg=self.bg_main)
+                btn_f.grid(row=3, column=0, columnspan=2, pady=12)
+                self._make_button(btn_f, "OK",       on_ok,       width=12).pack(side="left", padx=8)
+                self._make_button(btn_f, "Cancelar", dlg.destroy, width=12).pack(side="left", padx=8)
+
+                dlg.update_idletasks()
+                px = (self.mapeamento_window.winfo_x()
+                      + (self.mapeamento_window.winfo_width()  - dlg.winfo_width())  // 2)
+                py = (self.mapeamento_window.winfo_y()
+                      + (self.mapeamento_window.winfo_height() - dlg.winfo_height()) // 2)
+                dlg.geometry(f"+{px}+{py}")
+                dlg.grab_set()
+                dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+                dlg.wait_window()
+                return result[0]
+
+            # ── Handlers dos botões ───────────────────────────────────────────
+            def edit_clicked():
+                if not self._check_role(action_label="editar mapeamento de colunas",
+                                        parent=self.mapeamento_window):
+                    return
+                is_editing[0] = True
+                edit_btn.configure(state="disabled")
+                save_btn.configure(state="normal")
+                add_btn.configure(state="normal")
+                del_btn.configure(state="normal")
+
+            def on_double_click(event):
+                if not is_editing[0]:
+                    return
+                sel = tree.selection()
+                if not sel:
+                    return
+                idx = int(sel[0])
+                new_row = _open_row_dialog(rows[idx], "Editar Mapeamento")
+                if new_row is not None:
+                    rows[idx] = new_row
+                    _refresh_tree()
+                    tree.selection_set(str(idx))
+
+            tree.bind("<Double-1>", on_double_click)
+
+            def add_row():
+                new_row = _open_row_dialog(title="Adicionar Mapeamento")
+                if new_row is not None:
+                    rows.append(new_row)
+                    _refresh_tree()
+                    tree.selection_set(str(len(rows) - 1))
+
+            def del_row():
+                sel = tree.selection()
+                if not sel:
+                    self._dark_msg("Aviso", "Selecione uma linha para deletar.",
+                                   kind="warning", parent=self.mapeamento_window)
+                    return
+                idx = int(sel[0])
+                is_default = rows[idx][0] == "DEFAULT"
+                field_lbl  = STRUCTURED_FIELDS.get(rows[idx][1], rows[idx][1])
+                msg = (
+                    f"Você está deletando um mapeamento DEFAULT.\n"
+                    f"Campo '{field_lbl}' ficará NULL para modelos sem mapeamento específico.\n\nConfirmar?"
+                    if is_default else
+                    f"Deletar mapeamento: {rows[idx][0]} / {field_lbl}?"
+                )
+                if not self._dark_msg("Confirmar exclusão", msg,
+                                      kind="yesno", parent=self.mapeamento_window):
+                    return
+                rows.pop(idx)
+                _refresh_tree()
+
+            def _reset_mapeamento():
+                is_editing[0] = False
+                edit_btn.configure(state="normal")
+                save_btn.configure(state="disabled")
+                add_btn.configure(state="disabled")
+                del_btn.configure(state="disabled")
+
+            def save_clicked():
+                try:
+                    new_mappings = {}
+                    for row in rows:
+                        model_key, field_key, cols_str = row
+                        col_list = [c.strip() for c in cols_str.split(",") if c.strip()]
+                        if model_key not in new_mappings:
+                            new_mappings[model_key] = {}
+                        new_mappings[model_key][field_key] = col_list
+                    save_mappings(new_mappings)
+                    self._dark_msg("Salvo",
+                                   f"{len(rows)} mapeamento(s) salvo(s). "
+                                   "O monitor usará a nova configuração no próximo ciclo.",
+                                   kind="info", parent=self.mapeamento_window)
+                    _reset_mapeamento()
+                except Exception as ex:
+                    self._dark_msg("Erro", f"Não foi possível salvar:\n{ex}",
+                                   kind="error", parent=self.mapeamento_window)
+
+            def _on_close():
+                if is_editing[0]:
+                    msg   = ("Você está no modo de edição com alterações não salvas.\n\n"
+                             "Deseja fechar mesmo assim? (alterações serão descartadas)")
+                    title = "Fechar sem salvar"
+                else:
+                    msg   = "Deseja realmente fechar a tela de Mapeamento?"
+                    title = "Fechar"
+                if not self._dark_msg(title, msg, kind="yesno", parent=self.mapeamento_window):
+                    return
+                self.mapeamento_window.destroy()
+
+            self.mapeamento_window.protocol("WM_DELETE_WINDOW", _on_close)
             edit_btn.configure(command=edit_clicked)
             save_btn.configure(command=save_clicked)
             add_btn.configure(command=add_row)

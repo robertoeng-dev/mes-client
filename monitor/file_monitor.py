@@ -20,6 +20,7 @@ import time
 import hashlib
 
 from config.loader import load_config
+from config.column_mapper import load_mappings, resolve_field, detect_unmapped_fields
 from parser.cyg_parser import parse_appended_rows, detect_model_from_filename
 from state.offset_manager import OffsetManager
 from database.db_writer import DBWriter
@@ -84,17 +85,16 @@ def _list_csv_files(log_folder, recursive=False):
     return csv_files
 
 
-def _resolve_model_name(file_model, config_model, rows):
+def _resolve_model_name(file_model, config_model, rows, mappings):
     """Determina o nome do modelo com prioridade:
-    1º nome detectado no arquivo (PCM), 2º campo da primeira linha, 3º config.yaml."""
+    1º nome detectado no arquivo (PCM), 2º campo da linha (via column_mapper), 3º config.yaml."""
     if file_model:
         return file_model
 
     if rows:
-        for key in ("Model", "model", "proj_code"):
-            value = rows[0].get(key)
-            if value:
-                return str(value).strip()
+        val = resolve_field("model_name", rows[0], "DEFAULT", mappings)
+        if val:
+            return val
 
     return config_model or "UNKNOWN_MODEL"
 
@@ -113,48 +113,15 @@ def _resolve_version_name(file_version, rows):
     return "UNKNOWN_VERSION"
 
 
-def _resolve_serial_or_trace(row, station_type):
-    """Extrai identificador único do registro.
-    PCM_TESTER: compõe chave com máquina + canal + carrier + tempo (não tem serial único).
-    CYG: usa SerialNumber ou barcode diretamente."""
-    station_type = station_type.upper()
-
-    if station_type == "PCM_TESTER":
-        machine  = row.get("machine_no")  or ""
-        channel  = row.get("channel_no")  or ""
-        carrier  = row.get("device_name") or row.get("barcode") or ""
-        test_time = row.get("test_time")  or ""
-        return f"{machine}|CH{channel}|{carrier}|{test_time}"
-
-    return (
-        row.get("SerialNumber")
-        or row.get("serial_number")
-        or row.get("barcode")
-        or row.get("device_name")
-    )
-
-
-def _resolve_result(row, station_type):
-    """Extrai resultado PASS/FAIL do campo correto para cada tipo de testador."""
-    if station_type.upper() == "PCM_TESTER":
-        return _normalize_result(row.get("test_result"))
-
-    return _normalize_result(
-        row.get("Test PASS/FAIL STATUS")
-        or row.get("test_result")
-        or row.get("Result")
-    )
-
-
-def _resolve_test_start(row, station_type):
-    if station_type.upper() == "PCM_TESTER":
-        return row.get("test_time")
-
-    return row.get("Test Start Time") or row.get("test_time")
-
-
-def _resolve_test_stop(row, station_type):
-    return row.get("Test Stop Time")
+def _pcm_serial(row):
+    """Compõe chave composta para PCM_TESTER (não possui serial único).
+    Formato: machine_no|CH{channel_no}|device_name|test_time
+    Nota: colunas do PCM Tester são fixas pelo protocolo do equipamento."""
+    machine   = row.get("machine_no")  or ""
+    channel   = row.get("channel_no")  or ""
+    carrier   = row.get("device_name") or row.get("barcode") or ""
+    test_time = row.get("test_time")   or ""
+    return f"{machine}|CH{channel}|{carrier}|{test_time}"
 
 
 def _update_tray_color(status_callback, db_ok=True, sync_ok=True, stopped=False):
@@ -237,6 +204,10 @@ def start_monitor(stop_event=None, status_callback=None):
         runtime_status.set("client_status", "RUNNING")
 
         try:
+            # Recarrega mapeamentos a cada ciclo — nova config via tela MAPEAMENTO
+            # entra em vigor sem reiniciar o monitor.
+            mappings = load_mappings()
+
             if not os.path.exists(log_folder):
                 msg = f"Pasta não encontrada: {log_folder}"
                 logger.error(msg)
@@ -333,8 +304,17 @@ def start_monitor(stop_event=None, status_callback=None):
 
                 file_model, file_version = detect_model_from_filename(full_path)
 
-                model_name   = _resolve_model_name(file_model, config_model, rows)
+                model_name   = _resolve_model_name(file_model, config_model, rows, mappings)
                 version_name = _resolve_version_name(file_version, rows)
+
+                # Fundação Opção C: detecta campos sem mapeamento configurado
+                unmapped = detect_unmapped_fields(rows[0], model_name, mappings)
+                if unmapped:
+                    runtime_status.set("unmapped_fields_alert", {
+                        "file": file_name,
+                        "model": model_name,
+                        "fields": unmapped
+                    })
 
                 schema      = parsed["schema"]
                 schema_hash = _schema_hash(schema["headers"])
@@ -377,14 +357,20 @@ def start_monitor(stop_event=None, status_callback=None):
                 batch = []
 
                 for row in rows:
+                    serial = (
+                        _pcm_serial(row) if station_type == "PCM_TESTER"
+                        else resolve_field("serial_number", row, model_name, mappings)
+                    )
                     batch.append({
                         "station_id":      station_id,
                         "model_name":      model_name,
                         "version_name":    version_name,
-                        "serial_number":   _resolve_serial_or_trace(row, station_type),
-                        "result_status":   _resolve_result(row, station_type),
-                        "test_start_time": _resolve_test_start(row, station_type),
-                        "test_stop_time":  _resolve_test_stop(row, station_type),
+                        "serial_number":   serial,
+                        "result_status":   _normalize_result(
+                                               resolve_field("result_status", row, model_name, mappings)
+                                           ),
+                        "test_start_time": resolve_field("test_start_time", row, model_name, mappings),
+                        "test_stop_time":  resolve_field("test_stop_time",  row, model_name, mappings),
                         "source_file":     file_name,
                         "source_line_no":  row["_line_no"],
                         "schema_hash":     schema_hash,

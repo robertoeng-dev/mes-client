@@ -5,6 +5,27 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.0.2] — 2026-06-24
+
+### Adicionado
+- **Tela MAPEAMENTO**: novo editor de `column_mappings.json` acessível pelo tray popup (⇄). Permite definir quais colunas do CSV correspondem a cada campo estruturado do banco (serial, resultado, modelo, tempo) por modelo específico ou como DEFAULT global — sem abrir código fonte
+- **`config/column_mapper.py`**: módulo central de resolução de campos. Carrega o JSON, resolve campos por prioridade (modelo específico → DEFAULT → NULL), detecta campos não mapeados para base da Opção C futura
+- **`column_mappings.json`**: arquivo de mapeamento padrão com entradas DEFAULT para os formatos CYG e PCM Tester existentes
+- **Fundação da Opção C (futura)**: `detect_unmapped_fields()` detecta quando um schema novo não tem mapeamento configurado e registra em `runtime_status["unmapped_fields_alert"]` para futura notificação visual no ícone
+
+### Alterado
+- **`monitor/file_monitor.py`**: funções `_resolve_serial_or_trace`, `_resolve_result`, `_resolve_test_start`, `_resolve_test_stop` removidas; substituídas por `column_mapper.resolve_field()` — nomes de colunas agora lidos de `column_mappings.json` em vez de hardcoded no código
+- **`_resolve_model_name`** agora aceita `mappings` e usa `resolve_field("model_name", ...)` para o lookup por linha — sem lista hardcoded
+- **Mapeamentos recarregados a cada ciclo do monitor**: nova configuração salva via UI entra em vigor sem reiniciar o monitor
+- **PCM Tester serial**: mantido como composição fixa (`_pcm_serial`) por ser protocolo do equipamento; todos os outros campos (resultado, tempo) agora usam o mapper configurável
+
+### Documentação
+- `docs/CSV_FORMATS.md` atualizado: seção "Como adicionar suporte" reescrita para refletir fluxo sem código; nova seção sobre `column_mappings.json`
+- `README.md` atualizado: tabela de funcionalidades e arquitetura incluem MAPEAMENTO e `column_mappings.json`
+- Tela AJUDA atualizada com seção MAPEAMENTO e `column_mappings.json` na lista de arquivos de configuração
+
+---
+
 ## [1.0.1] — 2026-06-23
 
 ### Adicionado
