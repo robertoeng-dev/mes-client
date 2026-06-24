@@ -5,7 +5,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-## [1.0.2] — 2026-06-24
+## [1.0.2] — 2026-06-24 (patch 2)
 
 ### Adicionado
 - **Tela MAPEAMENTO**: novo editor de `column_mappings.json` acessível pelo tray popup (⇄). Permite definir quais colunas do CSV correspondem a cada campo estruturado do banco (serial, resultado, modelo, tempo) por modelo específico ou como DEFAULT global — sem abrir código fonte
@@ -18,6 +18,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - **`_resolve_model_name`** agora aceita `mappings` e usa `resolve_field("model_name", ...)` para o lookup por linha — sem lista hardcoded
 - **Mapeamentos recarregados a cada ciclo do monitor**: nova configuração salva via UI entra em vigor sem reiniciar o monitor
 - **PCM Tester serial**: mantido como composição fixa (`_pcm_serial`) por ser protocolo do equipamento; todos os outros campos (resultado, tempo) agora usam o mapper configurável
+
+### Corrigido
+- **Tela ACESSO RESTRITO não recebia teclado no .exe compilado** (STOP e EXIT): após o popup do tray ser destruído, `GetForegroundWindow()` retorna 0 e o código anterior pulava o `SetForegroundWindow` inteiramente; corrigido tratando `fg_hwnd == 0` como caminho válido + adicionado "ALT trick" (`keybd_event`) que concede foreground permission ao processo (obrigatório para `console=False` no PyInstaller)
+- **Retry de foco**: `_check_role` agora reaplica `_bring_to_front` + `focus_set` 120 ms após o primeiro `grab_set`, eliminando o caso de race condition onde o shell roubava o foco depois do `popup.destroy()`
 
 ### Documentação
 - `docs/CSV_FORMATS.md` atualizado: seção "Como adicionar suporte" reescrita para refletir fluxo sem código; nova seção sobre `column_mappings.json`

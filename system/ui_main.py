@@ -217,21 +217,52 @@ class MESClientUI:
 
     def _bring_to_front(self, win):
         """Força janela ao primeiro plano mesmo com app em background.
-        Windows 11 bloqueia SetForegroundWindow se o processo não tem foco —
-        AttachThreadInput contorna isso temporariamente."""
+
+        Dois problemas comuns no .exe compilado (console=False):
+        1. Após fechar o popup do tray, GetForegroundWindow() pode retornar 0
+           (sem janela ativa) — a versão anterior ignorava esse caso e não chamava
+           SetForegroundWindow, deixando o diálogo sem foco do SO.
+        2. Windows bloqueia SetForegroundWindow para processos sem foreground
+           permission. A simulação de ALT (keybd_event) concede essa permissão
+           temporariamente — técnica documentada e amplamente usada.
+        """
         try:
+            win.update_idletasks()
             hwnd = win.winfo_id()
-            fg_hwnd = ctypes.windll.user32.GetForegroundWindow()
+            if not hwnd:
+                return
+
+            user32   = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+
+            # Simula ALT press/release → Windows concede foreground permission ao processo.
+            # Sem isso, SetForegroundWindow é ignorado silenciosamente quando outro processo
+            # (ou o próprio shell) tem o foco — comportamento padrão desde Windows XP SP1.
+            VK_MENU        = 0x12
+            KEYEVENTF_KEYUP = 0x0002
+            user32.keybd_event(VK_MENU, 0, 0, 0)
+            user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+
+            fg_hwnd  = user32.GetForegroundWindow()
+            our_tid  = kernel32.GetCurrentThreadId()
+
             if fg_hwnd and fg_hwnd != hwnd:
-                fg_tid = ctypes.windll.user32.GetWindowThreadProcessId(fg_hwnd, None)
-                our_tid = ctypes.windll.kernel32.GetCurrentThreadId()
+                fg_tid = user32.GetWindowThreadProcessId(fg_hwnd, None)
                 if fg_tid and fg_tid != our_tid:
-                    ctypes.windll.user32.AttachThreadInput(our_tid, fg_tid, True)
-                    ctypes.windll.user32.SetForegroundWindow(hwnd)
-                    ctypes.windll.user32.BringWindowToTop(hwnd)
-                    ctypes.windll.user32.AttachThreadInput(our_tid, fg_tid, False)
+                    user32.AttachThreadInput(our_tid, fg_tid, True)
+                    user32.BringWindowToTop(hwnd)
+                    user32.SetForegroundWindow(hwnd)
+                    user32.AttachThreadInput(our_tid, fg_tid, False)
                 else:
-                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    user32.BringWindowToTop(hwnd)
+                    user32.SetForegroundWindow(hwnd)
+            else:
+                # fg_hwnd == 0: nenhuma janela ativa (popup recém-fechado).
+                # Chama SetForegroundWindow diretamente — sem AttachThreadInput necessário.
+                user32.BringWindowToTop(hwnd)
+                user32.SetForegroundWindow(hwnd)
+
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE — garante que não está minimizado
         except Exception:
             pass
 
@@ -787,6 +818,16 @@ class MESClientUI:
         dlg.grab_set()
         dlg.focus_force()
         pwd_entry.focus_set()
+
+        # Retry após 120 ms: o fechamento do popup do tray pode roubar o foco logo
+        # depois do primeiro grab_set (popup.destroy() → Windows devolve foco ao shell).
+        # O retry re-aplica _bring_to_front e devolve o cursor ao Entry de senha.
+        def _retry_focus():
+            if dlg.winfo_exists():
+                self._bring_to_front(dlg)
+                pwd_entry.focus_set()
+        dlg.after(120, _retry_focus)
+
         dlg.protocol("WM_DELETE_WINDOW", _close_auth)
         dlg.wait_window()
 
