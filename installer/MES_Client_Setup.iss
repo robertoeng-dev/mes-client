@@ -10,7 +10,7 @@
 ; ==============================================================================
 
 #define AppName      "MES Client"
-#define AppVersion   "1.0"
+#define AppVersion   "1.0.2"
 #define AppPublisher "Salcomp - Engenharia de Teste"
 #define AppCopyright "Salcomp Manaus 2026"
 #define InstallDir   "C:\Utility\MES"
@@ -81,10 +81,13 @@ ptBR.FinishedLabel=A instalacao do [name] foi concluida com sucesso.%n%nClique e
 Source: "..\dist\MES_Client.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Limites de especificacao
-Source: "..\spec_limits.csv";     DestDir: "{app}"; Flags: ignoreversion
+Source: "..\spec_limits.csv";        DestDir: "{app}"; Flags: ignoreversion
+
+; Mapeamento de colunas CSV (editavel via tela MAPEAMENTO da UI)
+Source: "..\column_mappings.json";   DestDir: "{app}"; Flags: ignoreversion
 
 ; Icone (para o atalho e desinstalador)
-Source: "..\assets\app.ico";      DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\assets\app.ico";         DestDir: "{app}\assets"; Flags: ignoreversion
 
 ; ==============================================================================
 [Icons]
