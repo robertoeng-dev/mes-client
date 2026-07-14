@@ -50,7 +50,8 @@ class RuntimeStatus:
             "offline_queue_count":   0,
             "last_serial":           "",
             "last_result":           "",
-            "files_monitored":       0
+            "files_monitored":       0,
+            "session_rows_skipped":  0
         }
 
     def set(self, key, value):

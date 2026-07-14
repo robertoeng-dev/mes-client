@@ -175,7 +175,7 @@ O arquivo `config.yaml` é gerado automaticamente pelo instalador. Exemplo:
 
 ```yaml
 database:
-  host: 172.21.70.184
+  host: 10.0.0.100   # IP do servidor PostgreSQL na rede da fábrica
   port: 5432
   name: mes_db
   user: mes_user
@@ -193,7 +193,7 @@ log:
 
 sync:
   enabled: true
-  destination_folder: \\172.21.70.184\NonAlphaSec2Info\logs\A17
+  destination_folder: \\10.0.0.100\shared\logs\A17
   mode: diff
 
 spec_check:

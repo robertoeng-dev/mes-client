@@ -299,6 +299,18 @@ def start_monitor(stop_event=None, status_callback=None):
 
                 rows = parsed["rows"]
 
+                # Linhas rejeitadas pela validação do parser (cabeçalho
+                # repetido, linha truncada, lixo binário) — loga antes do
+                # "continue" para lote 100% rejeitado também aparecer no log
+                skipped = parsed.get("skipped") or []
+                if skipped:
+                    runtime_status.increment("session_rows_skipped", len(skipped))
+                    logger.warning(
+                        f"{len(skipped)} linha(s) rejeitada(s) em {file_name}: "
+                        + ", ".join(f"#{n}({r})" for n, r in skipped[:20])
+                        + (" ..." if len(skipped) > 20 else "")
+                    )
+
                 if not rows:
                     continue
 

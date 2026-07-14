@@ -38,6 +38,54 @@ def _safe_strip(value):
     return str(value).strip()
 
 
+# -----------------------------------------------------------------------------
+# VALIDAÇÃO DE LINHA (rejeita cabeçalho repetido e lixo binário antes do INSERT)
+# -----------------------------------------------------------------------------
+
+HEADER_REPEAT_RATIO = 0.6   # >=60% dos campos iguais ao próprio nome do header
+MIN_POPULATED_ABS   = 3     # linha de dados precisa preencher pelo menos 3 campos...
+MIN_POPULATED_RATIO = 0.25  # ...e pelo menos 25% do número de colunas do header
+GARBAGE_CHAR_ABS    = 3     # >=3 chars U+FFFD/não-imprimíveis => lixo binário
+GARBAGE_CHAR_RATIO  = 0.05  # ou >5% de todos os caracteres da linha
+
+
+def _row_reject_reason(cleaned, headers, has_extra_columns):
+    """Retorna None se a linha parece dado real; senão um código curto do
+    motivo da rejeição: 'header_repeat' | 'extra_columns' | 'too_few_fields'
+    | 'garbage_chars'.
+
+    Não pega o caso sistemático de UMA coluna com texto de cabeçalho em
+    todas as linhas (ex.: Station='Station') — isso é desalinhamento de
+    metadados do arquivo, tratado no lado do dashboard."""
+    non_empty_headers = [h for h in headers if h]
+
+    # 1) Linha de cabeçalho repetida (testador regravou o header no meio
+    #    do arquivo ou em rotação)
+    matches = sum(1 for h in non_empty_headers if cleaned.get(h) == h)
+    if non_empty_headers and matches / len(non_empty_headers) >= HEADER_REPEAT_RATIO:
+        return "header_repeat"
+
+    # 2) Mais células que colunas no header (DictReader estaciona o excesso
+    #    sob a chave None)
+    if has_extra_columns:
+        return "extra_columns"
+
+    # 3) Linha truncada/curta: DictReader preenche células faltantes com None
+    populated = [v for k, v in cleaned.items() if k and v]
+    if len(populated) < max(MIN_POPULATED_ABS,
+                            int(MIN_POPULATED_RATIO * len(non_empty_headers))):
+        return "too_few_fields"
+
+    # 4) Lixo binário: U+FFFD (de errors='replace') ou não-imprimíveis.
+    #    Limiar >1 para não rejeitar um acento legítimo gravado em Latin-1.
+    text = "".join(populated)
+    junk = sum(1 for c in text if c == "�" or (not c.isprintable() and c != "\t"))
+    if junk >= GARBAGE_CHAR_ABS or (text and junk / len(text) > GARBAGE_CHAR_RATIO):
+        return "garbage_chars"
+
+    return None
+
+
 def _parse_limit_from_step(step_text):
     """Extrai limites e unidade embutidos no texto de passo do PCM Tester.
 
@@ -122,7 +170,7 @@ def read_header_and_meta(file_path, station_type="AUTO"):
     """Lê cabeçalho, limites e unidades do arquivo CSV.
     Retorna dicionário com format, headers, upper_map, lower_map, unit_map,
     display_map e data_start_offset (posição em bytes onde os dados começam)."""
-    with open(file_path, "r", encoding="utf-8-sig", errors="ignore", newline="") as f:
+    with open(file_path, "r", encoding="utf-8-sig", errors="replace", newline="") as f:
         header_line = f.readline()
         second_line = f.readline()
 
@@ -217,7 +265,7 @@ def parse_appended_rows(file_path, last_state, station_type="AUTO"):
     complete_lines = []
     new_offset     = current_offset
 
-    with open(file_path, "r", encoding="utf-8-sig", errors="ignore", newline="") as f:
+    with open(file_path, "r", encoding="utf-8-sig", errors="replace", newline="") as f:
         f.seek(current_offset)
 
         while True:
@@ -235,6 +283,7 @@ def parse_appended_rows(file_path, last_state, station_type="AUTO"):
     if not complete_lines:
         return {
             "rows":        [],
+            "skipped":     [],
             "new_offset":  current_offset,
             "new_line_no": current_line_no,
             "file_size":   file_size,
@@ -247,18 +296,32 @@ def parse_appended_rows(file_path, last_state, station_type="AUTO"):
         fieldnames=headers
     )
 
-    rows = []
+    rows    = []
+    skipped = []   # [(line_no, motivo), ...] — linhas rejeitadas pela validação
 
     for row in reader:
         current_line_no += 1
 
+        # Células além do número de colunas do header ficam sob a chave None
+        extra = row.pop(None, None)
+
         # Limpa espaços em todas as chaves e valores
         cleaned = {_safe_strip(k): _safe_strip(v) for k, v in row.items()}
+
+        reason = _row_reject_reason(cleaned, headers, has_extra_columns=extra is not None)
+        if reason:
+            # O offset continua avançando (não reprocessar lixo para sempre) e
+            # current_line_no conta a linha pulada (source_line_no continua
+            # alinhado com o arquivo físico).
+            skipped.append((current_line_no, reason))
+            continue
+
         cleaned["_line_no"] = current_line_no   # número de linha para source_line_no no banco
         rows.append(cleaned)
 
     return {
         "rows":        rows,
+        "skipped":     skipped,
         "new_offset":  new_offset,
         "new_line_no": current_line_no,
         "file_size":   file_size,
