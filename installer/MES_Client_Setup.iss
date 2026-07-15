@@ -10,7 +10,7 @@
 ; ==============================================================================
 
 #define AppName      "MES Client"
-#define AppVersion   "1.0.2"
+#define AppVersion   "1.0.3"
 #define AppPublisher "Salcomp - Engenharia de Teste"
 #define AppCopyright "Salcomp Manaus 2026"
 #define InstallDir   "C:\Utility\MES"

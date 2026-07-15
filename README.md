@@ -6,7 +6,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13%2B-336791?logo=postgresql&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/Version-1.0.2-blue)
+![Version](https://img.shields.io/badge/Version-1.0.3-blue)
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 
 ---
@@ -87,7 +87,7 @@ MES_Client_Complete/
 │   ├── Instalar_MES_Client.ps1         # Instalador PowerShell alternativo
 │   ├── Testar_Instalador_Local.ps1     # Teste sem servidor de fábrica
 │   └── Output/
-│       └── MES_Client_Setup_v1.0.2.exe   # Instalador gerado (22 MB, single-file)
+│       └── MES_Client_Setup_v1.0.3.exe   # Instalador gerado (22 MB, single-file)
 ├── assets/
 │   ├── app.ico                         # Ícone da aplicação (multi-size ICO)
 │   ├── installer_banner.bmp            # Painel dark do wizard Inno Setup
@@ -122,7 +122,7 @@ MES_Client_Complete/
 ### Opção 1 — Instalador (recomendado para produção)
 
 ```
-MES_Client_Setup_v1.0.2.exe
+MES_Client_Setup_v1.0.3.exe
 ```
 
 O wizard guia o técnico por:
@@ -250,7 +250,7 @@ Tabela principal `mes_test_results`:
 
 Para implantar em múltiplas estações PCM Tester na linha de produção:
 
-1. Copie `MES_Client_Setup_v1.0.2.exe` para um pendrive
+1. Copie `MES_Client_Setup_v1.0.3.exe` para um pendrive
 2. Em cada estação: execute o instalador como Administrador
 3. Preencha modelo e ID da máquina no wizard
 4. Valide: ícone verde na bandeja + log mostra `MONITOR INICIADO`
