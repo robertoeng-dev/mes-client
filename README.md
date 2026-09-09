@@ -320,7 +320,7 @@ Veja o [Guia de Deploy](docs/DEPLOY.md) para o procedimento completo de homologa
 
 **Roberto Parente**
 Engenharia de Teste Industrial — Salcomp Manaus
-[robertotec.eng3@gmail.com](mailto:robertotec.eng3@gmail.com)
+[robertotec.eng3@gmail.com](mailto:robertotec.eng5@gmail.com)
 
 ---
 
