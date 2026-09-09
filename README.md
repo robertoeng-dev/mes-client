@@ -6,7 +6,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13%2B-336791?logo=postgresql&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/Version-1.0.3-blue)
+![Version](https://img.shields.io/badge/Version-1.0.4-blue)
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 
 ---
@@ -81,23 +81,36 @@ MES_Client_Complete/
 │   ├── loader.py           # Carregamento de config.yaml com suporte a variáveis ${ENV}
 │   └── column_mapper.py    # Resolução de campos CSV via column_mappings.json
 ├── logs/
+│   ├── __init__.py         # ATENÇÃO: 'logs' é PACOTE Python, não só pasta de saída
 │   └── logger_setup.py     # RotatingFileHandler, log estruturado
+├── tests/
+│   ├── test_parser_validation.py   # Validação de linhas (header repetido, lixo, truncada)
+│   ├── test_correcoes_fase_a.py    # Guardas de regressão das correções 1.0.4
+│   └── regression_real_files.py    # Reparse dos CSVs reais listados em offsets.json
 ├── installer/
 │   ├── MES_Client_Setup.iss            # Script Inno Setup (instalador profissional)
 │   ├── Instalar_MES_Client.ps1         # Instalador PowerShell alternativo
 │   ├── Testar_Instalador_Local.ps1     # Teste sem servidor de fábrica
 │   └── Output/
-│       └── MES_Client_Setup_v1.0.3.exe   # Instalador gerado (22 MB, single-file)
+│       └── MES_Client_Setup_v1.0.4.exe   # Instalador gerado (22 MB, single-file)
 ├── assets/
+│   ├── make_icon.py                    # Gera o app.ico (artefato, não versionado)
 │   ├── app.ico                         # Ícone da aplicação (multi-size ICO)
 │   ├── installer_banner.bmp            # Painel dark do wizard Inno Setup
 │   └── installer_header.bmp           # Header dark das páginas internas
 ├── config.yaml             # Configuração da estação (gerado pelo instalador)
+├── config.example.yaml     # Modelo de configuração — este é o versionado
 ├── spec_limits.csv         # Limites LSL/USL por modelo e passo de teste
 ├── column_mappings.json    # Mapeamento colunas CSV → campos do banco (editável via UI)
 ├── parser_TE.spec          # Spec PyInstaller para compilar o EXE
-└── requirements.txt        # Dependências Python
+├── requirements.txt        # Dependências de execução
+└── requirements-dev.txt    # Ferramentas de autor (pytest, python-docx)
 ```
+
+> **Nota sobre a pasta `logs/`** — ela é um **pacote Python**, não apenas o destino
+> dos arquivos de log. No `.gitignore` use `logs/*.log`, nunca `logs/`: ignorar a
+> pasta inteira remove o `logger_setup.py` do repositório e qualquer clone quebra
+> com `ModuleNotFoundError`. Foi exatamente o que aconteceu até a versão 1.0.4.
 
 ---
 
@@ -122,7 +135,7 @@ MES_Client_Complete/
 ### Opção 1 — Instalador (recomendado para produção)
 
 ```
-MES_Client_Setup_v1.0.3.exe
+MES_Client_Setup_v1.0.4.exe
 ```
 
 O wizard guia o técnico por:
@@ -142,7 +155,7 @@ O instalador automaticamente:
 
 ```bash
 # 1. Clonar o repositório
-git clone https://github.com/seu-usuario/mes-client.git
+git clone https://github.com/robertoeng-dev/mes-client.git
 cd mes-client
 
 # 2. Criar ambiente virtual
@@ -151,9 +164,12 @@ python -m venv .venv
 
 # 3. Instalar dependências
 pip install -r requirements.txt
+# Para rodar os testes e gerar a documentação .docx:
+# pip install -r requirements-dev.txt
 
 # 4. Configurar
-cp .env.example .env
+copy config.example.yaml config.yaml   # e ajuste para a sua estação
+copy .env.example .env
 # Editar .env com MES_DB_PASSWORD=sua_senha
 
 # 5. Executar
@@ -163,8 +179,20 @@ python system/ui_main.py
 ### Compilar o EXE
 
 ```bash
+# O app.ico é artefato gerado (está no .gitignore) — recrie num clone limpo:
+.venv\Scripts\python.exe assets\make_icon.py
+
 .venv\Scripts\pyinstaller.exe parser_TE.spec --noconfirm
-# Saída: dist/MES_Client.exe (≈ 20 MB)
+# Saída: dist/MES_Client.exe (≈ 21 MB)
+```
+
+### Rodar os testes
+
+Não exigem banco de dados nem pytest — rodam direto:
+
+```bash
+.venv\Scripts\python.exe tests\test_parser_validation.py
+.venv\Scripts\python.exe tests\test_correcoes_fase_a.py
 ```
 
 ---
@@ -240,9 +268,18 @@ Tabela principal `mes_test_results`:
 | `serial_number` | TEXT | Número de série |
 | `result_status` | TEXT | PASS / FAIL |
 | `row_data` | JSONB | Dados completos da linha |
-| `source_file` | TEXT | Arquivo CSV de origem |
+| `source_file` | TEXT | Caminho do CSV **relativo a `log.folder`**, com `/` — ex.: `A17/2026-09-09.csv` |
 | `source_line_no` | INTEGER | Linha do CSV (deduplicação) |
 | `created_at` | TIMESTAMP | Data/hora de inserção |
+
+A deduplicação é garantida pelo índice único `(station_id, source_file, source_line_no)`.
+
+> **Mudança na 1.0.4** — `source_file` passou a guardar o caminho relativo em vez de
+> apenas o nome do arquivo. Com `log.recursive: true`, dois CSVs de mesmo nome em
+> subpastas diferentes (`A17/2026-09-09.csv` e `A16/2026-09-09.csv`) colidiam no
+> índice único e o `ON CONFLICT DO NOTHING` descartava o segundo em silêncio.
+> Ao atualizar uma estação que já tem dados, os registros antigos continuam com o
+> nome curto: ou migre com `UPDATE`, ou trate a data da atualização como corte.
 
 ---
 
@@ -250,7 +287,7 @@ Tabela principal `mes_test_results`:
 
 Para implantar em múltiplas estações PCM Tester na linha de produção:
 
-1. Copie `MES_Client_Setup_v1.0.3.exe` para um pendrive
+1. Copie `MES_Client_Setup_v1.0.4.exe` para um pendrive
 2. Em cada estação: execute o instalador como Administrador
 3. Preencha modelo e ID da máquina no wizard
 4. Valide: ícone verde na bandeja + log mostra `MONITOR INICIADO`

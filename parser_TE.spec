@@ -4,10 +4,14 @@ a = Analysis(
     ['system\\ui_main.py'],
     pathex=['.'],
     binaries=[],
+    # config.yaml NAO entra aqui: esta' no .gitignore (tem IP e senha reais da
+    # estacao) e o build falharia num clone limpo. Empacotamos o exemplo; o
+    # instalador gera o config.yaml definitivo ao lado do exe.
     datas=[
-        ('config.yaml',      '.'),
-        ('spec_limits.csv',  '.'),
-        ('assets/app.ico',   'assets'),
+        ('config.example.yaml',  '.'),
+        ('spec_limits.csv',      '.'),
+        ('column_mappings.json', '.'),
+        ('assets/app.ico',       'assets'),
     ],
     hiddenimports=[
         'config.loader',

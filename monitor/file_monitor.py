@@ -26,6 +26,7 @@ from state.offset_manager import OffsetManager
 from database.db_writer import DBWriter
 from buffer.queue_buffer import OfflineQueue
 from state.app_context import runtime_status
+from state.runtime_status import CLIENT_VERSION
 from logs.logger_setup import get_logger
 from sync.file_sync import sync_folder
 from spec.spec_validator import validate_schema_limits
@@ -44,6 +45,14 @@ def _schema_hash(headers):
     return hashlib.md5(text.encode("utf-8")).hexdigest()
 
 
+# Comparação por VALOR EXATO, não por substring.
+# Buscar a substring "NG" marcava PENDING, TESTING, RUNNING e WRONG como FAIL,
+# contaminando o yield. Valor desconhecido é preservado como veio, para
+# aparecer no banco e ser investigado — nunca convertido em FAIL por engano.
+RESULTADO_PASS = {"PASS", "PASSED", "OK", "P", "1", "TRUE", "GOOD"}
+RESULTADO_FAIL = {"FAIL", "FAILED", "NG", "F", "0", "FALSE", "BAD"}
+
+
 def _normalize_result(value):
     """Normaliza texto de resultado para PASS ou FAIL.
     Diferentes testadores usam variações (PASSED, NG, FAILED)."""
@@ -52,10 +61,10 @@ def _normalize_result(value):
 
     v = str(value).strip().upper()
 
-    if "PASS" in v or "PASSED" in v:
+    if v in RESULTADO_PASS:
         return "PASS"
 
-    if "FAIL" in v or "FAILED" in v or "NG" in v:
+    if v in RESULTADO_FAIL:
         return "FAIL"
 
     return v
@@ -178,7 +187,7 @@ def start_monitor(stop_event=None, status_callback=None):
 
     runtime_status.set("client_status", "RUNNING")
     runtime_status.set("station_name", station_id)
-    runtime_status.set("client_version", "1.0")
+    runtime_status.set("client_version", CLIENT_VERSION)
     runtime_status.set("operation_mode", operation_mode)
 
     logger.info("MONITOR INICIADO")
@@ -260,11 +269,15 @@ def start_monitor(stop_event=None, status_callback=None):
                 runtime_status.set("offline_queue_count", offline_queue.count())
 
                 if db.ping():
-                    # Banco voltou: tenta reenviar lotes que ficaram na fila offline
-                    pending = offline_queue.pop_all()
+                    # Banco voltou: reenvia os lotes que ficaram na fila offline.
+                    # peek_all() NÃO apaga o arquivo — só o commit() abaixo apaga,
+                    # e só depois de insert_rows ter dado commit no banco. Se o
+                    # insert falhar, a fila continua intacta para a próxima rodada.
+                    pending = offline_queue.peek_all()
 
                     if pending:
                         inserted = db.insert_rows(pending)
+                        offline_queue.commit()
                         runtime_status.mark_insert("offline_queue", inserted)
                         logger.info(f"Reenvio da fila offline concluído. Quantidade: {inserted}")
 
@@ -274,6 +287,21 @@ def start_monitor(stop_event=None, status_callback=None):
                 else:
                     runtime_status.set("db_status", "OFFLINE")
                     db_ok = False
+
+                    # Banco fora: NÃO parseia os CSVs nesta rodada.
+                    #
+                    # Antes, o ciclo seguia adiante, montava o lote, tomava
+                    # ConnectionError no insert e empilhava o MESMO lote na fila
+                    # a cada 5 s. Como o offset só avança após o commit, as
+                    # mesmas linhas voltavam para a fila indefinidamente: 4 h de
+                    # queda geravam centenas de MB de duplicatas, e o reenvio
+                    # carregava tudo isso na memória de uma vez.
+                    #
+                    # O offset preserva a posição de leitura — nada se perde,
+                    # apenas espera o banco voltar.
+                    _update_tray_color(status_callback, db_ok=False, sync_ok=sync_ok)
+                    time.sleep(scan_interval)
+                    continue
 
             if not db:
                 _update_tray_color(status_callback, db_ok=True, sync_ok=sync_ok)
@@ -285,6 +313,22 @@ def start_monitor(stop_event=None, status_callback=None):
             # -----------------------------------------------------------------
             for full_path in sorted(files):
                 file_name = os.path.basename(full_path)
+
+                # source_key: caminho RELATIVO à pasta monitorada, com barras
+                # normalizadas — é a chave que vai para o banco.
+                #
+                # Com o basename apenas, dois arquivos de mesmo nome em subpastas
+                # diferentes (A17/2026-09-08.csv e A16/2026-09-08.csv, com
+                # recursive: true) colidiam no índice único
+                # (station_id, source_file, source_line_no) e o
+                # ON CONFLICT DO NOTHING descartava o segundo em silêncio.
+                # file_name continua sendo usado só para exibição na UI.
+                try:
+                    source_key = os.path.relpath(full_path, log_folder).replace("\\", "/")
+                except ValueError:
+                    # relpath falha entre unidades diferentes no Windows
+                    source_key = file_name
+
                 # last_state: onde paramos na leitura anterior deste arquivo
                 state = offset_manager.get(full_path)
 
@@ -355,7 +399,7 @@ def start_monitor(stop_event=None, status_callback=None):
                         station_id=station_id,
                         model_name=model_name,
                         version_name=version_name,
-                        source_file=file_name,
+                        source_file=source_key,
                         schema_hash=schema_hash,
                         mismatches=mismatches
                     )
@@ -383,7 +427,7 @@ def start_monitor(stop_event=None, status_callback=None):
                                            ),
                         "test_start_time": resolve_field("test_start_time", row, model_name, mappings),
                         "test_stop_time":  resolve_field("test_stop_time",  row, model_name, mappings),
-                        "source_file":     file_name,
+                        "source_file":     source_key,
                         "source_line_no":  row["_line_no"],
                         "schema_hash":     schema_hash,
                         "row_data":        row

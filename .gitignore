@@ -35,7 +35,11 @@ dist/
 # --- Dados de runtime (gerados em execução) ---
 offsets.json
 offline_queue.jsonl
-logs/
+# ATENCAO: nao usar "logs/" aqui. 'logs' tambem e' o PACOTE Python que contem
+# logger_setup.py — ignorar a pasta inteira tira o modulo do repositorio e o
+# clone quebra com ModuleNotFoundError. Ignore apenas os arquivos de log.
+logs/*.log
+logs/*.log.*
 *.log
 
 # --- IDE ---

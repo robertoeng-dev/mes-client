@@ -5,6 +5,87 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.0.4] — 2026-09-09
+
+Correções de confiabilidade de dados e de reprodutibilidade, a partir de uma
+auditoria completa do código. Nenhuma mudança de funcionalidade — o
+comportamento visível ao operador é o mesmo, exceto onde ele antes perdia dado.
+
+### Corrigido — o repositório não rodava ao ser clonado
+
+- **`.gitignore` removia o pacote `logs/` do repositório.** A entrada `logs/`
+  tinha a intenção de ignorar os *arquivos* de log, mas `logs` também é o pacote
+  Python que contém o `logger_setup.py`. Como praticamente todo módulo faz
+  `from logs.logger_setup import get_logger`, qualquer clone quebrava logo no
+  start com `ModuleNotFoundError: No module named 'logs.logger_setup'`.
+  A regra passou a ser `logs/*.log` e `logs/*.log.*`, e o pacote foi versionado.
+- **O build do `.exe` também não funcionava num clone limpo.** O
+  `parser_TE.spec` exigia `config.yaml` em `datas`, e esse arquivo está — com
+  razão — no `.gitignore`, por conter IP e senha reais da estação. Agora empacota
+  `config.example.yaml`. Junto, foi incluído o `column_mappings.json`, que estava
+  faltando no `datas` e fazia o `.exe` cair sempre nos mapeamentos embutidos em
+  vez de ler o arquivo do usuário.
+- **`assets/make_icon.py`** — o `app.ico` é artefato gerado e não é versionado;
+  faltava a forma de recriá-lo. O script desenha o ICO multi-resolução
+  (16/32/48/64/256) usado pelo `.exe` e pelo instalador.
+
+### Corrigido — perda e duplicação silenciosa de dados
+
+- **A fila offline era apagada antes de o insert ser confirmado.** O `pop_all()`
+  lia os registros e removia o arquivo no mesmo passo; se o `insert_rows`
+  seguinte falhasse — conexão caindo entre o `ping` e o insert, timeout, disco
+  cheio no servidor — a exceção era apenas logada e os dados sumiam para sempre.
+  Substituído pelo par `peek_all()` + `commit()`: a fila só é apagada depois que
+  o banco confirmou. Reprocessar é seguro, o insert usa
+  `ON CONFLICT DO NOTHING`. O `peek_all()` também pula linhas com JSON
+  corrompido (escrita interrompida) em vez de derrubar o reenvio inteiro.
+- **A fila offline crescia sem limite com o banco fora.** Quando o `ping`
+  falhava, o ciclo seguia adiante mesmo assim, parseava os CSVs, tomava
+  `ConnectionError` no insert e empilhava o mesmo lote na fila — a cada
+  `scan_interval`. Como o offset só avança após o commit, as mesmas linhas
+  voltavam para a fila indefinidamente: uma queda de 4 h gerava centenas de MB
+  de duplicatas, e o reenvio depois carregava tudo isso na memória de uma vez.
+  Agora, com o banco offline, o monitor não parseia nem empilha — o offset
+  preserva a posição e ele apenas espera. O sync continua rodando normalmente.
+- **A deduplicação usava só o nome do arquivo.** O índice único é
+  `(station_id, source_file, source_line_no)`, mas `source_file` guardava o
+  *basename*. Com `log.recursive: true`, dois CSVs de mesmo nome em subpastas
+  diferentes (`A17/2026-09-09.csv` e `A16/2026-09-09.csv`) colidiam, e o
+  `ON CONFLICT DO NOTHING` descartava o segundo sem erro, sem log e sem alerta.
+  `source_file` passou a guardar o caminho relativo a `log.folder`, com `/`.
+
+### Corrigido — outros
+
+- **`_normalize_result` marcava `PENDING` como `FAIL`.** A checagem era por
+  substring, e `"NG" in v` casava com `PENDING`, `TESTING`, `RUNNING` e `WRONG`,
+  contaminando o yield. Passou a comparar por valor exato, com os conjuntos
+  `RESULTADO_PASS` e `RESULTADO_FAIL`. Valor desconhecido é preservado como veio,
+  para aparecer no banco e ser investigado — nunca convertido em `FAIL`.
+- **`offsets.json` podia ser corrompido por queda de energia.** A escrita não era
+  atômica; um `json.dump` interrompido deixava o arquivo pela metade e o
+  `JSONDecodeError` no start seguinte impedia o monitor de subir. Agora grava em
+  arquivo temporário com `fsync` e publica com `os.replace` (atômico no Windows e
+  no Linux). Se ainda assim encontrar um arquivo inválido, recomeça do zero em
+  vez de derrubar o monitor — as linhas já inseridas são descartadas pelo
+  `ON CONFLICT`.
+
+### Alterado
+
+- **`requirements.txt`** — `watchdog` removido: estava declarado mas não era
+  importado em lugar nenhum (o monitoramento é por polling, e continua sendo).
+- **`requirements-dev.txt`** — novo. `python-docx` (usado só pelo
+  `gerar_documentacao.py`) e `pytest` saíram das dependências de execução; o
+  operador na estação não precisa deles.
+
+### Testes
+
+- **`tests/test_correcoes_fase_a.py`** — novo. Guardas de regressão das
+  correções acima, sem precisar de banco: a fila offline sobrevive a um insert
+  que falha, dois arquivos de mesmo nome geram chaves distintas, `PENDING` não
+  vira `FAIL`, e o `offsets.json` corrompido não derruba o monitor.
+
+---
+
 ## [1.0.2] — 2026-06-24 (patch 2)
 
 ### Adicionado

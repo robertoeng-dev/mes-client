@@ -14,6 +14,11 @@ import threading
 from datetime import datetime
 
 
+# Fonte única da versão exibida nas telas STATUS e ABOUT.
+# Manter em sincronia com o AppVersion do installer/MES_Client_Setup.iss.
+CLIENT_VERSION = "1.0.4"
+
+
 class RuntimeStatus:
     def __init__(self):
         # Lock: impede que duas threads leiam/escrevam ao mesmo tempo
@@ -24,7 +29,7 @@ class RuntimeStatus:
             "client_status":         "STARTING",
             "db_status":             "UNKNOWN",
             "station_name":          "",
-            "client_version":        "1.0",
+            "client_version":        CLIENT_VERSION,
             "startup_time":          datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "operation_mode":        "",
 
