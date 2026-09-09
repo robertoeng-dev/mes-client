@@ -67,9 +67,13 @@ $dbUser = (Read-Host "  Usuario").Trim()
 if (-not $dbUser) { $dbUser = "mes_user" }
 
 Write-Host ""
-Write-Host "  Senha do banco [ENTER = mes123]:" -ForegroundColor Cyan
+# Sem senha padrao: este script esta' num repositorio publico.
+Write-Host "  Senha do banco (obrigatoria):" -ForegroundColor Cyan
 $dbPass = (Read-Host "  Senha").Trim()
-if (-not $dbPass) { $dbPass = "mes123" }
+if (-not $dbPass) {
+    Write-Host "  Senha obrigatoria. Teste cancelado." -ForegroundColor Red
+    exit 1
+}
 
 Write-Host ""
 Write-Host "  Pasta de CSV para monitorar [ENTER = C:\teste_csv]:" -ForegroundColor Cyan

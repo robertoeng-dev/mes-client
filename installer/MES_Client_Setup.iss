@@ -185,11 +185,20 @@ begin
   PageBanco.Add('Usuário do banco:', False);
   PageBanco.Add('Senha do banco:', True);  { True = oculta a senha }
 
-  PageBanco.Values[0] := '172.21.70.184';
+  { Host e senha NAO tem valor padrao de proposito.
+
+    Ate' a v1.0.4 o IP do servidor e a senha do mes_user vinham pre-preenchidos
+    aqui. Como este arquivo esta' num repositorio publico e o instalador
+    compilado circula em pendrive, isso equivalia a distribuir a credencial do
+    banco central junto com o programa.
+
+    O tecnico recebe host e senha da engenharia e digita na instalacao.
+    Porta, nome do banco e usuario continuam com padrao por nao serem segredo. }
+  PageBanco.Values[0] := '';
   PageBanco.Values[1] := '5432';
   PageBanco.Values[2] := 'mes_db';
   PageBanco.Values[3] := 'mes_user';
-  PageBanco.Values[4] := 'mes123';
+  PageBanco.Values[4] := '';
 end;
 
 
@@ -226,6 +235,25 @@ begin
   if CurPageID = PageConfig.ID then begin
     if Trim(PageConfig.Values[1]) = '' then begin
       MsgBox('Por favor, informe a pasta dos CSVs do TestPad.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+  end;
+
+  { Host e senha nao tem padrao - sem validacao, o tecnico passaria batido e a
+    estacao ficaria sem conseguir conectar, com erro so' aparecendo no log. }
+  if CurPageID = PageBanco.ID then begin
+    if Trim(PageBanco.Values[0]) = '' then begin
+      MsgBox('Informe o host do servidor PostgreSQL.' + #13#10 +
+             'Peca o endereco a engenharia se nao souber.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+
+    if Trim(PageBanco.Values[4]) = '' then begin
+      MsgBox('Informe a senha do banco.' + #13#10 +
+             'Ela sera gravada no arquivo .env da estacao, nunca no config.yaml.',
+             mbError, MB_OK);
       Result := False;
       Exit;
     end;

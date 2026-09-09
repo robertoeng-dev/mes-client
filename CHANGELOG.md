@@ -96,6 +96,48 @@ comportamento visível ao operador é o mesmo, exceto onde ele antes perdia dado
   Agora ambos vão explícitos como `false`, junto de `StopOnIdleEnd=false` e
   `StartWhenAvailable=true`.
 
+### Segurança — credenciais removidas do repositório
+
+O repositório é público e o instalador compilado circula em pendrive. Estavam
+escritos em texto plano, em quatro arquivos, a senha do `mes_user` do
+PostgreSQL, a senha do compartilhamento Samba e o IP do servidor MES.
+
+- **`installer/MES_Client_Setup.iss`** — o wizard não traz mais host e senha
+  pré-preenchidos. Os dois campos passaram a ser obrigatórios, com validação
+  que orienta o técnico a pedir os valores à engenharia. Porta, nome do banco e
+  usuário continuam com padrão por não serem segredo.
+- **`installer/Instalar_MES_Client.ps1`** — as constantes `$SERVER_IP`,
+  `$SAMBA_USER`, `$SAMBA_PASS` e `$DB_PASS` saíram do arquivo. O script pergunta
+  na execução, ou lê das variáveis de ambiente `MES_SERVER_IP`,
+  `MES_SAMBA_USER`, `MES_SAMBA_PASS` e `MES_DB_PASS` para instalar várias
+  estações sem redigitar.
+- **`installer/Testar_Instalador_Local.ps1`** — sem senha padrão; o campo passou
+  a ser obrigatório.
+- **`installer/Desinstalar_MES_Client.ps1`** — o caminho do compartilhamento
+  Samba agora é extraído do `config.yaml` da estação, em vez de estar fixo.
+- **`installer/Migrar_Senha_Para_Env.ps1`** — novo. Converte uma estação já
+  instalada para o modelo do `.env` sem reinstalar: lê a senha literal do
+  `config.yaml`, grava no `.env`, troca a linha pelo placeholder e guarda um
+  backup. Idempotente, com modo `-Simular`.
+
+> Remover os literais **não invalida o que já vazou** — o histórico do Git
+> preserva os commits anteriores. As duas senhas precisam ser trocadas no
+> servidor; só isso encerra a exposição.
+
+### Corrigido — arranque
+
+- **Um `.env` com BOM derrubava o cliente, em silêncio.** O `_load_dotenv` lia
+  o arquivo como `utf-8` puro, então o BOM que o Bloco de Notas e o
+  `Set-Content -Encoding utf8` do PowerShell 5.1 gravam grudava no nome da
+  primeira chave: `MES_DB_PASSWORD` virava `﻿MES_DB_PASSWORD` e a variável
+  simplesmente não existia. O `.env` e o `config.yaml` passaram a ser lidos com
+  `utf-8-sig`.
+- **Falha de arranque não deixava rastro.** Compilado com `console=False`,
+  qualquer exceção antes da primeira janela matava o processo sem log e sem
+  aviso — na estação isso aparecia como "o cliente não abre". Agora o
+  `__main__` registra a exceção no `client.log` e mostra um diálogo com o tipo
+  do erro e o caminho do log.
+
 ### Instalador
 
 - **Atualizar uma estação apagava a configuração dela.** O `GenerateConfig` do

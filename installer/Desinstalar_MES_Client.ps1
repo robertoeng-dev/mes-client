@@ -42,11 +42,26 @@ if (Test-Path $INSTALL_PATH) {
     }
 }
 
-# Desconecta compartilhamento Samba (ignora erros se nao mapeado)
-$sambaCon = "\\172.21.70.184\NonAlphaSec2Info"
-$conMap = Get-SmbMapping -RemotePath $sambaCon -ErrorAction SilentlyContinue
-if ($conMap) {
-    Remove-SmbMapping -RemotePath $sambaCon -Force -ErrorAction SilentlyContinue
+# Desconecta compartilhamento Samba (ignora erros se nao mapeado).
+# O endereco vem do config.yaml da estacao - nao fica escrito aqui, porque
+# este arquivo esta' num repositorio publico.
+$sambaCon = $null
+$cfgPath = "$INSTALL_PATH\config.yaml"
+if (Test-Path $cfgPath) {
+    $linha = Select-String -Path $cfgPath -Pattern 'destination_folder:\s*(\\\\[^\s]+)' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($linha) {
+        # Mantem so' \\servidor\compartilhamento, descartando as subpastas
+        $destino = $linha.Matches[0].Groups[1].Value
+        if ($destino -match '^(\\\\[^\\]+\\[^\\]+)') { $sambaCon = $Matches[1] }
+    }
+}
+
+if ($sambaCon) {
+    $conMap = Get-SmbMapping -RemotePath $sambaCon -ErrorAction SilentlyContinue
+    if ($conMap) {
+        Remove-SmbMapping -RemotePath $sambaCon -Force -ErrorAction SilentlyContinue
+        Write-Host "  OK  Compartilhamento desconectado: $sambaCon" -ForegroundColor Green
+    }
 }
 
 Write-Host ""

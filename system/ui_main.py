@@ -2560,5 +2560,27 @@ if __name__ == "__main__":
 
     root.destroy()
 
-    app = MESClientUI()
-    app.run()
+    # FALHA DE ARRANQUE NÃO PODE SER SILENCIOSA
+    # ----------------------------------------
+    # Compilado com console=False, qualquer exceção aqui matava o processo sem
+    # deixar rastro: nenhuma janela, nenhuma linha no log, e na estação isso
+    # parecia "o cliente simplesmente não abre". O caso real que motivou esta
+    # guarda foi um .env gravado com BOM — a variável MES_DB_PASSWORD ficava
+    # invisível e o loader levantava EnvironmentError antes de qualquer tela.
+    try:
+        app = MESClientUI()
+        app.run()
+    except Exception as e:
+        logger.exception(f"Falha fatal no arranque do MES Client: {e}")
+        try:
+            err = tk.Tk()
+            err.withdraw()
+            messagebox.showerror(
+                "MES Client — falha ao iniciar",
+                f"O MES Client não conseguiu iniciar.\n\n{type(e).__name__}: {e}\n\n"
+                f"Detalhes completos em:\n{os.path.join(get_base_path(), 'logs', 'client.log')}"
+            )
+            err.destroy()
+        except Exception:
+            pass    # sem sessão gráfica: o log já registrou
+        os._exit(1)

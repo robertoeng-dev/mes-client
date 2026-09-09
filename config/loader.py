@@ -38,7 +38,12 @@ def _load_dotenv(base_path):
     if not os.path.exists(env_path):
         return
 
-    with open(env_path, "r", encoding="utf-8") as f:
+    # utf-8-sig, não utf-8: o Bloco de Notas e o PowerShell 5.1
+    # (Set-Content -Encoding utf8) gravam BOM. Lendo como utf-8 puro, o BOM
+    # gruda no nome da primeira chave — vira "﻿MES_DB_PASSWORD" — e a
+    # variável simplesmente não existe, derrubando o cliente no arranque com
+    # uma mensagem que aponta para o lugar errado.
+    with open(env_path, "r", encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -97,7 +102,8 @@ def load_config():
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"config.yaml não encontrado em: {config_path}")
 
-    with open(config_path, "r", encoding="utf-8") as f:
+    # utf-8-sig: tolera BOM gravado por editor do Windows
+    with open(config_path, "r", encoding="utf-8-sig") as f:
         raw = yaml.safe_load(f)
 
     return _resolve_config(raw)
@@ -113,7 +119,8 @@ def load_raw_config():
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"config.yaml não encontrado em: {config_path}")
 
-    with open(config_path, "r", encoding="utf-8") as f:
+    # utf-8-sig: tolera BOM gravado por editor do Windows
+    with open(config_path, "r", encoding="utf-8-sig") as f:
         return yaml.safe_load(f)
 
 

@@ -128,8 +128,40 @@ edite o `.env` e reinicie o cliente.
 Isso vale a partir da v1.0.4. Estações instaladas com versões anteriores têm a
 senha em texto plano dentro do `config.yaml`; ao atualizar, o `config.yaml`
 antigo é preservado e continua funcionando, mas a senha continua exposta lá.
-Para migrar essas estações: crie o `.env` à mão e troque a linha `password:`
-do `config.yaml` pelo placeholder.
+
+**Para migrar uma estação já instalada**, sem reinstalar, rode como
+Administrador na própria estação:
+
+```powershell
+# confira primeiro, sem alterar nada
+powershell -ExecutionPolicy Bypass -File Migrar_Senha_Para_Env.ps1 -Simular
+
+# aplica
+powershell -ExecutionPolicy Bypass -File Migrar_Senha_Para_Env.ps1
+```
+
+O script lê a senha literal do `config.yaml`, grava no `.env`, troca a linha
+pelo placeholder e guarda um backup `config.yaml.bak-<data>`. É idempotente —
+rodar de novo numa estação já migrada não faz nada. Se a instalação não estiver
+em `C:\Utility\MES`, passe `-Caminho "D:\outro\lugar"`.
+
+Depois, valide reiniciando o cliente e conferindo no `logs\client.log` a linha
+`Conexão com banco estabelecida`.
+
+> **Cuidado com o BOM.** Se for criar ou editar o `.env` à mão, salve como
+> UTF-8 **sem BOM**. O Bloco de Notas e o `Set-Content -Encoding utf8` do
+> PowerShell 5.1 gravam BOM, que até a v1.0.4 grudava no nome da primeira
+> chave e fazia o cliente não encontrar a senha. A v1.0.4 lê com `utf-8-sig` e
+> tolera isso, mas estações com versão anterior não.
+
+### Se o cliente não abre
+
+A partir da v1.0.4, uma falha antes da primeira janela é registrada em
+`logs\client.log` e mostrada num diálogo com o tipo do erro. Antes, o processo
+morria calado — sem janela, sem log — e o sintoma na estação era simplesmente
+"não abre". Se acontecer numa estação em versão antiga, os suspeitos usuais
+são `config.yaml` malformado, `.env` ausente ou com BOM, e pasta de CSVs
+inexistente.
 
 ## Auto-start: a estação voltando a coletar depois de reiniciar
 

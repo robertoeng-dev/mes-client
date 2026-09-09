@@ -14,18 +14,46 @@ $ErrorActionPreference = "Stop"
 $Host.UI.RawUI.WindowTitle = "MES Client — Instalador"
 
 # ==============================================================================
-# CONSTANTES DE INFRAESTRUTURA
-# Altere aqui se o servidor ou credenciais mudarem
+# INFRAESTRUTURA
+#
+# Endereco e senhas NAO ficam mais escritos neste arquivo. Ate' a v1.0.4 eles
+# estavam, e como o repositorio e' publico isso expunha a credencial do banco
+# central e a do compartilhamento Samba da fabrica.
+#
+# Agora o script pergunta na execucao. Para instalar varias estacoes sem
+# redigitar, defina as variaveis de ambiente antes de chamar:
+#
+#   $env:MES_SERVER_IP  = "10.0.0.100"
+#   $env:MES_SAMBA_USER = "mesclient"
+#   $env:MES_SAMBA_PASS = "..."
+#   $env:MES_DB_PASS    = "..."
+#   .\Instalar_MES_Client.ps1
+#
+# Nao versione um arquivo com esses valores.
 # ==============================================================================
-$SERVER_IP     = "172.21.70.184"
+
+function Obter($valorAtual, $rotulo) {
+    if ($valorAtual) { return $valorAtual }
+    $lido = (Read-Host "  $rotulo").Trim()
+    if (-not $lido) {
+        Write-Host "  Valor obrigatorio. Instalacao cancelada." -ForegroundColor Red
+        exit 1
+    }
+    return $lido
+}
+
+Write-Host ""
+Write-Host "  Dados de conexao (peca a engenharia se nao souber):" -ForegroundColor Cyan
+
+$SERVER_IP     = Obter $env:MES_SERVER_IP  "IP do servidor MES"
 $SAMBA_SHARE   = "\\$SERVER_IP\NonAlphaSec2Info"
-$SAMBA_USER    = "mesclient"
-$SAMBA_PASS    = "mes@2026"
+$SAMBA_USER    = Obter $env:MES_SAMBA_USER "Usuario do Samba"
+$SAMBA_PASS    = Obter $env:MES_SAMBA_PASS "Senha do Samba"
 $DB_HOST       = $SERVER_IP
 $DB_PORT       = 5432
 $DB_NAME       = "mes_db"
 $DB_USER       = "mes_user"
-$DB_PASS       = "mes123"
+$DB_PASS       = Obter $env:MES_DB_PASS    "Senha do banco ($DB_USER)"
 $INSTALL_PATH  = "C:\Utility\MES"
 $EXE_NAME      = "MES_Client.exe"
 $TASK_NAME     = "MES_Client_Autostart"
