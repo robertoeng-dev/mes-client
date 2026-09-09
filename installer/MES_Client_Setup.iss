@@ -112,6 +112,8 @@ Filename: "taskkill.exe"; Parameters: "/F /IM {#ExeName}"; Flags: runhidden; Run
 ; Type: filesandordirs; Name: "{app}\state"
 ; Type: filesandordirs; Name: "{app}\data"
 Type: files; Name: "{app}\config.yaml"
+; O .env guarda a senha do banco - nao pode ficar para tras na desinstalacao
+Type: files; Name: "{app}\.env"
 
 ; ==============================================================================
 [Code]
@@ -242,8 +244,23 @@ end;
 
 
 { --------------------------------------------------------------------------
-  GenerateConfig: grava o config.yaml na pasta de instalacao
-  Usa o formato YAML com os valores digitados pelo tecnico
+  GenerateConfig: grava o .env e o config.yaml na pasta de instalacao
+
+  Duas regras importantes para producao:
+
+  1. A SENHA DO BANCO vai para o .env, nunca para o config.yaml. O config
+     guarda apenas o placeholder da variavel MES_DB_PASSWORD, que o
+     config/loader.py resolve na hora de conectar. E' o modelo que o
+     config.example.yaml sempre documentou; ate' a v1.0.4 o instalador
+     nao seguia.
+     ATENCAO: nao escreva a sintaxe completa do placeholder aqui dentro -
+     a chave de fechamento encerraria este comentario Pascal antes da hora.
+
+  2. ATUALIZACAO PRESERVA O CONFIG DA ESTACAO. Se ja' existe um config.yaml,
+     ele nao e' sobrescrito - a estacao ja' foi configurada, possivelmente
+     ajustada a mao depois da instalacao, e reinstalar por cima para atualizar
+     a versao nao pode zerar isso. O .env e' sempre reescrito, porque a senha
+     vem do formulario e pode ter mudado.
   -------------------------------------------------------------------------- }
 procedure GenerateConfig;
 var
@@ -258,6 +275,7 @@ var
   DbPass:      String;
   SyncDest:    String;
   ConfigPath:  String;
+  EnvPath:     String;
   Content:     String;
 begin
   StationId  := BuildStationId;
@@ -271,6 +289,14 @@ begin
   DbPass     := Trim(PageBanco.Values[4]);
   SyncDest   := '\\' + DbHost + '\NonAlphaSec2Info\logs\' + Model;
   ConfigPath := ExpandConstant('{app}\config.yaml');
+  EnvPath    := ExpandConstant('{app}\.env');
+
+  { --- .env: sempre reescrito, e' onde a senha do banco mora --- }
+  SaveStringToFile(EnvPath, 'MES_DB_PASSWORD=' + DbPass + #13#10, False);
+
+  { --- config.yaml: preservado se a estacao ja' esta' configurada --- }
+  if FileExists(ConfigPath) then
+    Exit;
 
   { Substitui barras invertidas por barras normais para o YAML }
   StringChangeEx(CsvFolder, '\', '/', False);
@@ -282,7 +308,7 @@ begin
     '  port: '     + DbPort                                  + #13#10 +
     '  name: '     + DbName                                  + #13#10 +
     '  user: '     + DbUser                                  + #13#10 +
-    '  password: ' + DbPass                                  + #13#10 +
+    '  password: ${MES_DB_PASSWORD}'                         + #13#10 +
     '  table: mes_test_results'                              + #13#10 +
     ''                                                       + #13#10 +
     'station:'                                               + #13#10 +
@@ -415,9 +441,16 @@ end;
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
   MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
 var
-  StationId: String;
+  StationId:  String;
+  ConfigAcao: String;
 begin
   StationId := BuildStationId;
+
+  { Avisa o tecnico se esta e' uma atualizacao sobre estacao ja' configurada }
+  if FileExists(ExpandConstant('{app}\config.yaml')) then
+    ConfigAcao := 'Preservar o config.yaml existente desta estacao'
+  else
+    ConfigAcao := 'Gerar config.yaml para esta estação';
 
   Result :=
     'Estação configurada:' + NewLine +
@@ -430,7 +463,8 @@ begin
     NewLine +
     'Ações que serão executadas:' + NewLine +
     Space + 'Copiar MES_Client.exe para C:\Utility\MES'                     + NewLine +
-    Space + 'Gerar config.yaml para esta estação'                           + NewLine +
+    Space + ConfigAcao                                                      + NewLine +
+    Space + 'Gravar a senha do banco no arquivo .env'                       + NewLine +
     Space + 'Registrar inicialização automática (Task Scheduler)'           + NewLine +
     Space + 'Criar atalho na Área de Trabalho';
 end;

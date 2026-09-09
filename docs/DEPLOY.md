@@ -67,11 +67,69 @@ nome do arquivo e nada muda.
 1. Copie `installer\Output\MES_Client_Setup_v1.0.4.exe` para a estação (via
    pendrive ou rede).
 2. Se já existe uma instalação anterior rodando, feche-a pelo ícone da
-   bandeja (STOP/EXIT) antes de instalar por cima.
-3. Execute o instalador **como Administrador**.
-4. No wizard, confirme modelo, ID da máquina, pasta de CSVs e dados do banco
-   — o instalador tenta reaproveitar `config.yaml` existente se já houver um.
+   bandeja (STOP → EXIT, senha de ENGENHARIA) antes de instalar por cima.
+3. Execute o instalador **como Administrador** (botão direito → Executar como
+   administrador). Ele precisa disso para gravar em `C:\Utility\MES` e para
+   registrar a tarefa no Task Scheduler.
+4. Preencha o wizard:
+
+   | Página | Campo | Exemplo |
+   |---|---|---|
+   | Estação | Modelo do produto | `A17` |
+   | Estação | ID da máquina | `BR-PCMTEST-01` |
+   | Arquivos | Linha de produção | `NAVAJO` |
+   | Arquivos | Pasta dos CSVs do TestPad | `D:\Testpad software\CSV\A17` |
+   | Banco | Host, porta, banco, usuário | padrão da fábrica |
+   | Banco | Senha | senha do `mes_user` |
+
+   O `Station ID` é montado automaticamente como `PCM_{MODELO}_{MÁQUINA}` —
+   confira na tela de resumo antes de confirmar.
 5. Ao final, o MES Client inicia automaticamente (ícone na bandeja).
+
+### O que o instalador faz na estação
+
+| Ação | Detalhe |
+|---|---|
+| Copia os arquivos | `MES_Client.exe`, `spec_limits.csv`, `column_mappings.json`, `assets\app.ico` em `C:\Utility\MES` |
+| Cria as pastas de runtime | `logs\`, `state\`, `data\` |
+| Grava o `.env` | `MES_DB_PASSWORD=<senha digitada>` — **sempre reescrito** |
+| Gera o `config.yaml` | **apenas se ainda não existir** — veja abaixo |
+| Registra o auto-start | Tarefa `MES_Client_Autostart` no Task Scheduler, com reinício automático (3 tentativas, 1 min) |
+| Cria o atalho | Área de trabalho de todos os usuários |
+
+### ⚠ Instalação nova x atualização
+
+**A partir da v1.0.4 o instalador preserva o `config.yaml` de uma estação já
+configurada.** Reinstalar por cima para atualizar a versão não apaga mais os
+ajustes feitos naquela estação. A tela "Pronto para instalar" avisa qual dos
+dois casos está acontecendo — leia antes de confirmar.
+
+Consequência prática: se você **quer** reconfigurar uma estação (mudou o
+modelo, mudou a pasta de CSVs), o wizard sozinho não basta. Apague o
+`C:\Utility\MES\config.yaml` antes de instalar, ou edite pela tela
+CONFIGURAÇÃO do próprio cliente.
+
+O `.env` é exceção: ele é sempre reescrito com a senha digitada no wizard,
+porque a senha do banco pode ter mudado.
+
+### ⚠ Onde fica a senha do banco
+
+**A senha nunca é gravada no `config.yaml`.** Ele guarda só o placeholder, e o
+valor real fica em `C:\Utility\MES\.env`:
+
+```
+MES_DB_PASSWORD=senha_real_aqui
+```
+
+Se o `.env` for apagado, o cliente não sobe — o `config/loader.py` levanta
+erro dizendo qual variável está faltando. Para trocar a senha sem reinstalar,
+edite o `.env` e reinicie o cliente.
+
+Isso vale a partir da v1.0.4. Estações instaladas com versões anteriores têm a
+senha em texto plano dentro do `config.yaml`; ao atualizar, o `config.yaml`
+antigo é preservado e continua funcionando, mas a senha continua exposta lá.
+Para migrar essas estações: crie o `.env` à mão e troque a linha `password:`
+do `config.yaml` pelo placeholder.
 
 ## Verificação pós-instalação
 
@@ -98,8 +156,11 @@ nome do arquivo e nada muda.
 ## Rollback
 
 Se algo der errado, o instalador anterior (`MES_Client_Setup_v1.0.3.exe`,
-se ainda disponível) pode ser reinstalado por cima — `config.yaml` da
-estação não é sobrescrito pelo instalador quando já existe.
+se ainda disponível) pode ser reinstalado por cima.
+
+Atenção: o instalador **v1.0.3 sobrescreve o `config.yaml`** da estação com os
+valores do wizard — esse comportamento só foi corrigido na v1.0.4. Antes de
+fazer rollback, salve uma cópia do `C:\Utility\MES\config.yaml`.
 
 Atenção: ao voltar para a v1.0.3, a chave `source_file` volta a ser o nome curto
 do arquivo. Se linhas já foram gravadas com o caminho relativo, elas serão

@@ -77,6 +77,25 @@ comportamento visível ao operador é o mesmo, exceto onde ele antes perdia dado
   `gerar_documentacao.py`) e `pytest` saíram das dependências de execução; o
   operador na estação não precisa deles.
 
+### Instalador
+
+- **Atualizar uma estação apagava a configuração dela.** O `GenerateConfig` do
+  wizard reescrevia o `config.yaml` incondicionalmente no `ssPostInstall`, e a
+  documentação afirmava o contrário. Reinstalar por cima só para atualizar a
+  versão zerava os ajustes daquela estação. Agora o `config.yaml` só é gerado
+  quando ainda não existe, e a tela "Pronto para instalar" avisa qual dos dois
+  casos está acontecendo.
+- **A senha do banco era gravada em texto plano no `config.yaml`.** Isso
+  contrariava o próprio `config.example.yaml`, que documenta
+  `password: ${MES_DB_PASSWORD}` com a observação "NUNCA hardcoded" — mas o
+  instalador nunca criava o `.env`. Agora ele grava a senha em
+  `C:\Utility\MES\.env` e escreve apenas o placeholder no `config.yaml`. O
+  fluxo do técnico não muda: a senha continua sendo digitada uma vez no wizard.
+  O `.env` também passou a ser removido na desinstalação.
+- **`assets/make_installer_images.py`** — novo. O `installer_banner.bmp` e o
+  `installer_header.bmp` são artefatos gerados e não versionados; faltava a
+  forma de recriá-los, e sem eles o `.iss` não compila num clone limpo.
+
 ### Testes
 
 - **`tests/test_correcoes_fase_a.py`** — novo. Guardas de regressão das
