@@ -131,6 +131,74 @@ antigo é preservado e continua funcionando, mas a senha continua exposta lá.
 Para migrar essas estações: crie o `.env` à mão e troque a linha `password:`
 do `config.yaml` pelo placeholder.
 
+## Auto-start: a estação voltando a coletar depois de reiniciar
+
+O instalador registra a tarefa **`MES_Client_Autostart`** no Task Scheduler.
+Três detalhes decidem se ela realmente cumpre o papel.
+
+### 1. O gatilho é logon, não boot
+
+`<LogonTrigger />` dispara quando **um usuário faz logon**, não quando a
+máquina liga. Isso é o correto para este app: ele é uma interface gráfica com
+ícone na bandeja e precisa de uma sessão de desktop — como serviço do Windows
+ele não teria onde desenhar o ícone.
+
+Consequência: se a estação reinicia e para na tela de login do Windows, o
+cliente **não sobe**. Para operação desacompanhada, configure o **logon
+automático** do Windows na conta da estação.
+
+### 2. A tarefa fica amarrada à conta que instalou
+
+O `schtasks` grava o SID do usuário que rodou o instalador em
+`<Principal><UserId>`, com `LogonType InteractiveToken`. A tarefa só dispara
+quando **aquela conta** faz logon.
+
+> **Regra prática: instale logado na conta que a estação realmente usa.**
+> Se você instalar com a sua conta de técnico e o operador entrar com outra,
+> o cliente nunca sobe sozinho.
+
+Para conferir em qual conta a tarefa ficou:
+
+```powershell
+schtasks /Query /TN "MES_Client_Autostart" /V /FO LIST | findstr /C:"Run As User"
+```
+
+Para corrigir sem reinstalar, apague e recrie a tarefa logado na conta certa:
+
+```powershell
+schtasks /Delete /TN "MES_Client_Autostart" /F
+```
+
+e reinstale, ou recrie a tarefa manualmente apontando para
+`C:\Utility\MES\MES_Client.exe`.
+
+### 3. Sem senha de operador, o cliente entra sozinho
+
+Até a v1.0.3, o cliente subia e **ficava parado na tela de login** — o monitor
+só começava quando alguém clicava ENTRAR. Uma estação reiniciada de madrugada
+passava a noite inteira sem coletar, com o ícone aparentemente normal.
+
+A partir da v1.0.4, se `auth.operador_password` estiver vazio ou ausente no
+`config.yaml`, o cliente entra direto como OPERADOR e o monitor começa. O log
+registra a decisão:
+
+```
+Auth: OPERADOR sem senha configurada - iniciando sem tela de login.
+```
+
+As ações restritas continuam protegidas: CONFIG, LIMITES, MAPEAMENTO, STOP e
+EXIT pedem a senha de ENGENHARIA. **Se você definir `operador_password`, a
+tela de login volta a aparecer** — e aí a estação passa a exigir intervenção
+humana após cada reinicialização. Para operação 24h, deixe vazio.
+
+### O que a tarefa não cobre
+
+`RestartOnFailure` (3 tentativas, 1 min) só reage se o processo **terminar**.
+Um travamento com o processo vivo — o sintoma registrado em 03/09/2026:
+processo em pé, 0 s de CPU, sem escrever `client.log` nem `offsets.json` — não
+é detectado. Até existir um watchdog, o sinal de saúde confiável é o
+`last_insert_time` na tela STATUS ou a data de modificação do `client.log`.
+
 ## Verificação pós-instalação
 
 1. Ícone da bandeja **verde** = monitor ativo, dados sendo enviados.

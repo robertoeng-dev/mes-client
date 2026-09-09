@@ -77,6 +77,25 @@ comportamento visível ao operador é o mesmo, exceto onde ele antes perdia dado
   `gerar_documentacao.py`) e `pytest` saíram das dependências de execução; o
   operador na estação não precisa deles.
 
+### Corrigido — a estação não voltava coletando depois de reiniciar
+
+- **A tela de login travava o monitor no arranque.** O `run()` agendava
+  `_show_login_then_start`, que bloqueava em `wait_window()` até alguém
+  escolher o perfil e clicar ENTRAR — só então `ensure_monitor_running()` era
+  chamado. Numa estação que roda 24h e reinicia sozinha, isso significava
+  voltar do boot com o ícone na bandeja e **nenhum dado sendo coletado**, sem
+  sinal visível de que estava parado. Agora, quando `auth.operador_password`
+  está vazio (ou ausente), o cliente entra direto como OPERADOR e inicia o
+  monitor. Não há perda de controle: CONFIG, LIMITES, MAPEAMENTO, STOP e EXIT
+  continuam passando por `_check_role`, que pede a senha de ENGENHARIA. Definir
+  `operador_password` no `config.yaml` faz a tela de login voltar a aparecer.
+- **A tarefa de auto-start herdava padrões que impediam a coleta.** O XML não
+  declarava as opções de energia, e o Task Scheduler aplicava
+  `DisallowStartIfOnBatteries=true` e `StopIfGoingOnBatteries=true`. Numa
+  estação ligada a nobreak que se reporta como bateria, o cliente não subiria.
+  Agora ambos vão explícitos como `false`, junto de `StopOnIdleEnd=false` e
+  `StartWhenAvailable=true`.
+
 ### Instalador
 
 - **Atualizar uma estação apagava a configuração dela.** O `GenerateConfig` do

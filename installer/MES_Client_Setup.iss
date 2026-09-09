@@ -374,6 +374,16 @@ begin
     '    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>'           + #13#10 +
     '    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>'                          + #13#10 +
     '    <RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure>' + #13#10 +
+    { Sem estas quatro linhas o Task Scheduler aplica os padroes dele, que
+      impedem a estacao de coletar: nao inicia se estiver em bateria, para
+      se cair para bateria, e para quando a maquina deixa de estar ociosa.
+      Numa estacao ligada a nobreak que se reporta como bateria, isso
+      significa cliente parado sem ninguem perceber. }
+    '    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>'         + #13#10 +
+    '    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>'                 + #13#10 +
+    '    <IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd>'                     +
+    '<RestartOnIdle>false</RestartOnIdle></IdleSettings>'                        + #13#10 +
+    '    <StartWhenAvailable>true</StartWhenAvailable>'                          + #13#10 +
     '  </Settings>'                                                              + #13#10 +
     '  <Actions>'                                                                + #13#10 +
     '    <Exec>'                                                                 + #13#10 +

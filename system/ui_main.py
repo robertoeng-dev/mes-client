@@ -47,6 +47,9 @@ from config.loader import load_config, load_raw_config, save_config, get_base_pa
 from monitor.file_monitor import start_monitor
 from state.app_context import runtime_status
 from system.single_instance import SingleInstance
+from logs.logger_setup import get_logger
+
+logger = get_logger()
 
 
 # -----------------------------------------------------------------------------
@@ -839,12 +842,41 @@ class MESClientUI:
 
         return result[0]
 
+    def _operador_sem_senha(self):
+        """True se o perfil OPERADOR está configurado sem senha.
+
+        Senha de operador vazia já significa, pelo próprio modelo do config,
+        'operador não precisa se autenticar'. Ler isso do disco a cada start
+        mantém a decisão nas mãos do config.yaml, não do código."""
+        try:
+            auth = load_raw_config().get("auth", {}) or {}
+            return not str(auth.get("operador_password", "") or "").strip()
+        except Exception:
+            # Config ilegível: cai no caminho seguro, que é pedir login.
+            return False
+
     def _show_login_then_start(self):
-        if not self._show_login_dialog():
+        # ARRANQUE DESACOMPANHADO
+        # ----------------------
+        # A estação roda 24h e reinicia sozinha. Se o login bloqueasse aqui,
+        # o cliente subiria na bandeja mas o monitor só começaria quando
+        # alguém clicasse ENTRAR — o PC voltaria do boot sem coletar nada,
+        # sem nenhum sinal visível de que está parado.
+        #
+        # Quando OPERADOR não tem senha, entramos direto nesse perfil. Não há
+        # perda de controle: ações restritas (CONFIG, LIMITES, MAPEAMENTO,
+        # STOP, EXIT) continuam passando por _check_role, que pede a senha de
+        # ENGENHARIA. Basta definir auth.operador_password no config.yaml para
+        # a tela de login voltar a aparecer.
+        if self._operador_sem_senha():
+            self.current_role = "operador"
+            logger.info("Auth: OPERADOR sem senha configurada - iniciando sem tela de login.")
+        elif not self._show_login_dialog():
             # os._exit(0): termina o processo imediatamente.
             # sys.exit() lançaria SystemExit que poderia ser capturado — não queremos isso
             # aqui porque o mainloop ainda não iniciou completamente.
             os._exit(0)
+
         self.ensure_monitor_running()
         runtime_status.set("client_status", "RUNNING")
         self.update_status_icon("green")
