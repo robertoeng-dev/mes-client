@@ -147,7 +147,6 @@ O wizard guia o técnico por:
 Para instalar sem wizard (várias estações), use `/SILENT` com os parâmetros
 `/PREFIX /MODEL /MACHINE /TESTER /LINE /CSV /SYNC /DBHOST /DBPASS`. Manual
 completo em [docs/INSTALACAO.md](docs/INSTALACAO.md).
-5. Configurações do banco de dados
 
 O instalador automaticamente:
 - Copia os arquivos para `C:\Utility\MES`
