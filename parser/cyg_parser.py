@@ -16,6 +16,11 @@
 #   Linha 2: descrição + limites embutidos no texto: "Tensão(V)[3.75-3.85]"
 #   Linhas 3+: dados de teste
 #
+# P2500S (BW P2500S, linha Caiapó / modelo A08):
+#   Linha 1: 6 colunas fixas, depois triplas (Max, Min, MEDIÇÃO) e 'Station'
+#   Linhas 2+: dados de teste — cada linha carrega o próprio Max/Min
+#   (Max/Min viram MEDIÇÃO_Max / MEDIÇÃO_Min para não colidir no DictReader)
+#
 # parse_appended_rows() lê SOMENTE linhas novas desde a última leitura,
 # usando o offset em bytes para posicionar o cursor (f.seek).
 # =============================================================================
@@ -140,10 +145,22 @@ def detect_model_from_filename(file_path):
     return model_name, version_name
 
 
-def detect_csv_format(second_line_values, station_type="AUTO"):
+def _is_p2500s_header(headers):
+    """Cabeçalho do BW P2500S (linha Caiapó, modelo A08): 6 colunas fixas,
+    depois triplas (Max, Min, NOME_DA_MEDIÇÃO) e, por último, 'Station'.
+    A assinatura é 'Max' e 'Min' repetidos várias vezes no próprio header."""
+    if not headers:
+        return False
+    n_max = sum(1 for h in headers if h.strip().lower() == "max")
+    n_min = sum(1 for h in headers if h.strip().lower() == "min")
+    return n_max >= 2 and n_max == n_min
+
+
+def detect_csv_format(second_line_values, station_type="AUTO", headers=None):
     """Determina o formato do CSV.
     Se station.type está definido no config.yaml, respeita (não detecta).
-    AUTO: detecta pelo padrão [lsl-usl] na segunda linha."""
+    AUTO: detecta P2500S pelo header (Max/Min repetidos) e PCM_TESTER pelo
+    padrão [lsl-usl] na segunda linha; caso contrário CYG."""
     if station_type and station_type.upper() == "PCM_TESTER":
         return "PCM_TESTER"
 
@@ -153,13 +170,45 @@ def detect_csv_format(second_line_values, station_type="AUTO"):
     if station_type and station_type.upper() == "FT":
         return "FT"
 
-    # Heurística: segunda linha de PCM contém padrão [número-número]
+    if station_type and station_type.upper() == "P2500S":
+        return "P2500S"
+
+    # Heurística 1: header do P2500S repete Max/Min por medição
+    if _is_p2500s_header(headers or []):
+        return "P2500S"
+
+    # Heurística 2: segunda linha de PCM contém padrão [número-número]
     joined = "|".join(second_line_values)
 
     if re.search(r"\[[\-0-9.]+\s*-\s*[\-0-9.]+\]", joined):
         return "PCM_TESTER"
 
     return "CYG"
+
+
+def _p2500s_rename_headers(headers):
+    """Dá nome único às colunas Max/Min do P2500S.
+
+    O header vem como ..., Max, Min, OCV, Max, Min, IR, ... — 13 pares com o
+    mesmo nome. csv.DictReader guardaria só o último par e os limites por
+    medição se perderiam. Cada tripla vira (OCV_Max, OCV_Min, OCV): o
+    row_data fica autodescritivo e nenhuma coluna colide.
+
+    Retorna (headers_renomeados, [(nome_medicao, idx_max, idx_min), ...])."""
+    renamed = list(headers)
+    triples = []
+    i = 0
+    while i < len(headers) - 2:
+        if (headers[i].strip().lower() == "max"
+                and headers[i + 1].strip().lower() == "min"):
+            name = headers[i + 2].strip()
+            renamed[i]     = f"{name}_Max"
+            renamed[i + 1] = f"{name}_Min"
+            triples.append((name, i, i + 1))
+            i += 3
+        else:
+            i += 1
+    return renamed, triples
 
 
 # -----------------------------------------------------------------------------
@@ -171,8 +220,9 @@ def read_header_and_meta(file_path, station_type="AUTO"):
     Retorna dicionário com format, headers, upper_map, lower_map, unit_map,
     display_map e data_start_offset (posição em bytes onde os dados começam)."""
     with open(file_path, "r", encoding="utf-8-sig", errors="replace", newline="") as f:
-        header_line = f.readline()
-        second_line = f.readline()
+        header_line  = f.readline()
+        after_header = f.tell()          # P2500S: os dados começam aqui (linha 2)
+        second_line  = f.readline()
 
         if not header_line:
             raise ValueError(f"Arquivo vazio: {file_path}")
@@ -180,14 +230,31 @@ def read_header_and_meta(file_path, station_type="AUTO"):
         headers       = _parse_csv_line(header_line.rstrip("\n"))
         second_values = _parse_csv_line(second_line.rstrip("\n")) if second_line else []
 
-        csv_format = detect_csv_format(second_values, station_type)
+        csv_format = detect_csv_format(second_values, station_type, headers)
 
         upper_map   = {}
         lower_map   = {}
         unit_map    = {}
         display_map = {}
 
-        if csv_format == "PCM_TESTER":
+        if csv_format == "P2500S":
+            # P2500S: sem linhas de limite — cada linha de dados carrega o
+            # próprio Max/Min ao lado do valor. Dados começam na linha 2.
+            # Os limites do catálogo (mes_csv_schemas) saem da primeira linha
+            # de dados; se ela estiver truncada, ficam vazios e o próximo
+            # arquivo completo preenche.
+            data_start_offset = after_header
+            headers, triples  = _p2500s_rename_headers(headers)
+
+            for name, i_max, i_min in triples:
+                upper_map[name] = (_safe_strip(second_values[i_max]) or None) if i_max < len(second_values) else None
+                lower_map[name] = (_safe_strip(second_values[i_min]) or None) if i_min < len(second_values) else None
+
+            for col in headers:
+                display_map[col] = col
+                unit_map[col]    = None
+
+        elif csv_format == "PCM_TESTER":
             # PCM: limites embutidos na segunda linha — dados começam na linha 3
             data_start_offset = f.tell()
 

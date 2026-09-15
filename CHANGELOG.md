@@ -5,6 +5,73 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.0.5] — 2026-09-15
+
+Primeira versão a rodar fora das estações PCM Tester: linha Caiapó (BW P2500S,
+modelo A08). Nenhuma mudança de comportamento para as estações já instaladas.
+
+### Adicionado
+
+- **Formato `P2500S` no parser** (`parser/cyg_parser.py`). O CSV do BW P2500S
+  não tem linhas de limite: os dados começam na linha 2 e cada linha carrega
+  o próprio `Max`/`Min` ao lado de cada medição. Sem esse formato, a detecção
+  automática caía em `CYG` e **consumia as três primeiras linhas de dados de
+  cada arquivo como limites/unidades**. Agora o formato é detectado pelo
+  header (`Max`/`Min` repetidos) ou forçado com `station.type: P2500S`; as
+  colunas `Max`/`Min` viram `OCV_Max`/`OCV_Min` etc., para não colidirem no
+  `DictReader`, e os limites da primeira linha vão para `mes_csv_schemas`.
+  Validado em 15/09 com dois arquivos reais da M13 (11.848 linhas, zero
+  campo mapeado nulo, canais 1A–4B preservados em `row_data->>'Station'`).
+- **Instalador reescrito para qualquer linha, não só PCM**
+  (`installer/MES_Client_Setup.iss`):
+  - campo **Tipo da estação / prefixo** (`PCM`, `FUNC`, `TABC`) — o
+    `station_id` deixa de ter `PCM_` fixo;
+  - campo **Tipo do testador** (`AUTO`, `PCM_TESTER`, `CYG`, `P2500S`),
+    gravado em `station.type`;
+  - **pasta de cópia para a rede é um campo próprio** (página 4). Antes era
+    derivada do host do banco, o que para a Caiapó gerava
+    `\\<host do postgres>\NonAlphaSec2Info\...`. Vazio = `sync.enabled: false`;
+  - campo **Tabela** (padrão `mes_results`);
+  - `log.recursive` e `spec_check.enabled` só ficam `true` para `PCM_TESTER`;
+  - pasta CSV sugerida por tipo (`D:\Testpad software\CSV\<modelo>` para
+    PCM, `D:\battData` para as demais);
+  - **instalação silenciosa** com `/SILENT /PREFIX= /MODEL= /MACHINE=
+    /TESTER= /LINE= /CSV= /SYNC= /DBHOST= /DBPORT= /DBNAME= /DBUSER=
+    /DBPASS= /TABLE=`. Sem `/DBHOST` ou `/DBPASS` o instalador aborta com
+    mensagem em vez de gravar config incompleto.
+- **Manual de instalação** em `docs/INSTALACAO.md` — wizard, silencioso,
+  pós-instalação, atualização, desinstalação e diagnóstico, cobrindo PCM e
+  Caiapó.
+- **Mapeamento de colunas para o A08** em `column_mappings.json`. O CSV do
+  P2500S usa `BARCODE.1`, `TESTRESULT`, `MODELNAME` e `TESTTIME`; nenhum alias
+  do bloco `DEFAULT` batia (a busca é exata), e a estação gravaria
+  `serial_number`, `result_status`, `model_name` e `test_start_time` todos NULL.
+  Validado com 5 linhas reais no banco em 10/09.
+- **`database.jsonb_index`** (padrão `false`). O índice GIN em `row_data` passou
+  a ser opcional: numa tabela que cresce ~1 GB/mês por linha de produção ele
+  custa amplificação de escrita em todo INSERT, e o painel consulta colunas,
+  não o JSON.
+
+### Alterado
+
+- `config.example.yaml`: `database.table` passa a `mes_results` — a tabela da
+  geração atual, compartilhada por todas as linhas. `mes_test_results` fica
+  como histórico das PCM. `log.recursive` e `spec_check.enabled` passam a
+  `false` por padrão: o P2500S grava numa pasta só e carrega Max/Min em cada
+  linha, e `spec_limits.csv` só cobre A16.
+
+### Notas de campo (Caiapó, setembro/2026)
+
+- O header do A08 repete `Max`/`Min` 13 vezes. `csv.DictReader` mantém só a
+  última ocorrência — os limites por medição devem ir para
+  `mes_csv_schemas.upper/lower_limits_json`, não para `row_data`.
+- Valor `-1.000` em qualquer medição é o sentinela de "não medido" do P2500S,
+  não uma reprova de produto. 67% das reprovas de setembro eram isso.
+- Os arquivos gravados em `DATA\TestData\Line2_MC2` saem com 45 campos em vez
+  de 46 e perdem a coluna `Station` (o canal). Só a pasta `Parente` preserva.
+
+---
+
 ## [1.0.4] — 2026-09-09
 
 Correções de confiabilidade de dados e de reprodutibilidade, a partir de uma

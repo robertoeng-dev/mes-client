@@ -248,12 +248,15 @@ class DBWriter:
         ON {self.table} (result_status)
         """)
 
-        # GIN: índice especial do PostgreSQL para busca dentro de JSONB
-        self.cur.execute(f"""
-        CREATE INDEX IF NOT EXISTS idx_{self.table}_jsonb
-        ON {self.table}
-        USING GIN (row_data)
-        """)
+        # GIN em row_data: opcional. Numa tabela que cresce ~1 GB/mês por linha
+        # de produção, o índice custa amplificação de escrita em todo INSERT e só
+        # compensa se alguém consultar dentro do JSON. O painel lê colunas.
+        if self.config["database"].get("jsonb_index", False):
+            self.cur.execute(f"""
+            CREATE INDEX IF NOT EXISTS idx_{self.table}_jsonb
+            ON {self.table}
+            USING GIN (row_data)
+            """)
 
         self.conn.commit()
         logger.info("Estrutura do banco validada/criada com sucesso.")

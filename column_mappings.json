@@ -24,5 +24,12 @@
       "Test Stop Time",
       "stop_time"
     ]
+  },
+  "A08": {
+    "model_name": ["MODELNAME"],
+    "result_status": ["TESTRESULT"],
+    "serial_number": ["BARCODE.1"],
+    "test_start_time": ["TESTTIME"],
+    "test_stop_time": []
   }
 }

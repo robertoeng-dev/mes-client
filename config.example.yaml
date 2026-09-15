@@ -13,17 +13,18 @@ database:
   name: mes_db
   user: mes_user
   password: ${MES_DB_PASSWORD} # Definido no arquivo .env (NUNCA hardcoded)
-  table: mes_test_results
+  table: mes_results           # geração atual (todas as linhas); mes_test_results é o histórico PCM
+  jsonb_index: false           # GIN em row_data: só ligue se alguém consultar dentro do JSON
 
 station:
-  id: PCM_A06_BR-PCMTEST-01    # Formato: {tipo}_{modelo}_BR-PCMTEST-{num}
-  type: PCM_TESTER              # PCM_TESTER ou CYG_TESTER
+  id: PCM_A06_BR-PCMTEST-01    # Formato: {prefixo}_{modelo}_{maquina} — prefixo PCM, FUNC ou TABC
+  type: AUTO                   # AUTO (detecta pelo arquivo) | PCM_TESTER | CYG | P2500S (BW P2500S, Caiapó/A08)
   model: A06                   # Modelo do produto (A06, A17, A16...)
   line: NAVAJO                 # Linha de produção
 
 log:
   folder: D:\Testpad\CSV\A06   # Pasta onde o equipamento gera os CSVs
-  recursive: true
+  recursive: false             # true só quando o testador grava em subpastas por modelo (TestPad)
 
 operation:
   mode: both                   # "database" | "sync" | "both"
@@ -37,7 +38,7 @@ parser:
   scan_interval: 5             # Intervalo de varredura em segundos
 
 spec_check:
-  enabled: true
+  enabled: false               # P2500S grava Max/Min em cada linha; spec_limits.csv só cobre A16
   file: spec_limits.csv        # Limites LSL/USL por modelo e passo de teste
 
 auth:

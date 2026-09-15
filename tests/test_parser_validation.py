@@ -111,7 +111,55 @@ def run_pcm_case():
     print("OK  formato PCM_TESTER: 1 boa, 1 rejeitada")
 
 
+def run_p2500s_case():
+    """BW P2500S (Caiapó / A08): sem linhas de limite, dados na linha 2,
+    header com Max/Min repetidos por medição e coluna Station no fim."""
+    path = os.path.join(tempfile.gettempdir(), "test_p2500s_validation.csv")
+
+    header = ("BARCODE.1,BARCODE.2,MODELNAME,PRD_CD,TESTTIME,TESTRESULT,"
+              "Max,Min,OCV,Max,Min,IR,Station\n")
+
+    def row(serial, res, canal, ocv="3.779", ir="52"):
+        # o P2500S grava um TAB depois de cada valor, antes da vírgula
+        return (f"{serial}\t,PK{serial}\t,A08\t,2-2\t,20260914060907\t,{res}\t,"
+                f"3.80000\t,3.75000\t,{ocv}\t,65.00\t,40.00\t,{ir}\t,{canal}\n")
+
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(header)
+        f.write(row("S001", "PASS", "1A"))            # linha 1 — boa (é a 2ª do arquivo)
+        f.write(row("S002", "FAIL", "4B", ir="-1.000"))  # linha 2 — boa (sentinela -1 é dado)
+        # linha 3 — curta (rejeitar). No arquivo real são 5 campos contra 46
+        # colunas; aqui o header tem 13, então o limiar mínimo é 3 campos.
+        f.write("Scan at operation,1\n")
+        f.write(row("S003", "PASS", "2A"))            # linha 4 — boa
+
+    # AUTO tem que reconhecer pelo header; P2500S explícito idem
+    for tipo in ("AUTO", "P2500S"):
+        result = parse_appended_rows(path, initial_state(), station_type=tipo)
+        schema = result["schema"]
+
+        assert schema["format"] == "P2500S", f"[{tipo}] formato={schema['format']}"
+        assert schema["headers"][6:9] == ["OCV_Max", "OCV_Min", "OCV"], schema["headers"]
+        assert schema["headers"][-1] == "Station"
+        assert schema["upper_map"]["OCV"] == "3.80000" and schema["lower_map"]["OCV"] == "3.75000"
+        assert schema["upper_map"]["IR"]  == "65.00"   and schema["lower_map"]["IR"]  == "40.00"
+
+        line_nos = [r["_line_no"] for r in result["rows"]]
+        assert line_nos == [1, 2, 4], f"[{tipo}] esperado [1, 2, 4], veio {line_nos}"
+        assert result["skipped"] == [(3, "too_few_fields")], result["skipped"]
+
+        r1 = result["rows"][0]
+        assert r1["BARCODE.1"] == "S001" and r1["TESTRESULT"] == "PASS"
+        assert r1["Station"] == "1A" and r1["OCV"] == "3.779" and r1["OCV_Max"] == "3.80000"
+        assert result["rows"][1]["IR"] == "-1.000", "sentinela -1.000 é dado, não rejeição"
+        assert result["new_offset"] == os.path.getsize(path)
+
+    os.remove(path)
+    print("OK  formato P2500S: 3 boas, 1 rejeitada, Max/Min renomeados, limites no catálogo")
+
+
 if __name__ == "__main__":
     run_cyg_case()
     run_pcm_case()
+    run_p2500s_case()
     print("\nTodos os testes passaram.")

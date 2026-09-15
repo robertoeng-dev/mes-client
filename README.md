@@ -6,7 +6,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13%2B-336791?logo=postgresql&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/Version-1.0.4-blue)
+![Version](https://img.shields.io/badge/Version-1.0.5-blue)
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
 
 ---
@@ -135,14 +135,18 @@ MES_Client_Complete/
 ### Opção 1 — Instalador (recomendado para produção)
 
 ```
-MES_Client_Setup_v1.0.4.exe
+MES_Client_Setup_v1.0.5.exe
 ```
 
 O wizard guia o técnico por:
-1. Modelo do produto (A06, A17, A16...)
-2. ID da máquina (BR-PCMTEST-01...)
-3. Linha de produção
-4. Pasta dos CSVs do TestPad
+1. Tipo da estação (PCM, FUNC, TABC), modelo, ID da máquina e tipo do testador (AUTO, PCM_TESTER, CYG, P2500S)
+2. Linha de produção e pasta dos CSVs
+3. Banco de dados (host, senha, tabela)
+4. Pasta de cópia para a rede (opcional)
+
+Para instalar sem wizard (várias estações), use `/SILENT` com os parâmetros
+`/PREFIX /MODEL /MACHINE /TESTER /LINE /CSV /SYNC /DBHOST /DBPASS`. Manual
+completo em [docs/INSTALACAO.md](docs/INSTALACAO.md).
 5. Configurações do banco de dados
 
 O instalador automaticamente:
@@ -285,14 +289,15 @@ A deduplicação é garantida pelo índice único `(station_id, source_file, sou
 
 ## Deploy em Produção
 
-Para implantar em múltiplas estações PCM Tester na linha de produção:
+Para implantar em múltiplas estações na linha de produção:
 
-1. Copie `MES_Client_Setup_v1.0.4.exe` para um pendrive
-2. Em cada estação: execute o instalador como Administrador
-3. Preencha modelo e ID da máquina no wizard
+1. Copie `MES_Client_Setup_v1.0.5.exe` para um pendrive
+2. Em cada estação, **logado na conta do operador**: execute o instalador como Administrador
+3. Preencha tipo da estação, modelo e ID da máquina no wizard
 4. Valide: ícone verde na bandeja + log mostra `MONITOR INICIADO`
 
-Veja o [Guia de Deploy](docs/DEPLOY.md) para o procedimento completo de homologação.
+Veja o [Manual de Instalação](docs/INSTALACAO.md) (v1.0.5, PCM e Caiapó) e o
+[Guia de Deploy](docs/DEPLOY.md) (migração v1.0.3 → v1.0.4 e auto-start).
 
 ---
 
