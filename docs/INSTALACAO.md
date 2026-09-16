@@ -73,14 +73,26 @@ force um tipo se o AUTO errar.
 
 | Campo | Valor |
 |---|---|
-| Host | IP ou nome do servidor PostgreSQL (fornecido pela engenharia) |
+| Host | `172.21.70.184` (já vem preenchido — é o único servidor de produção; altere só se mudou) |
 | Porta | `5432` |
 | Nome do banco | `mes_db` |
 | Usuário | `mes_user` |
-| Senha | senha do `mes_user` — vai para `C:\Utility\MES\.env`, nunca para o `config.yaml` |
+
+### Página 4 — Credenciais do Banco de Dados
+
+| Campo | Valor |
+|---|---|
+| Senha | senha do `mes_user` — vai para `C:\Utility\MES\.env`, nunca para o `config.yaml`. **Não vem preenchida**: peça à engenharia e digite na hora |
 | Tabela de resultados | `mes_results` (padrão). Só use `mes_test_results` se a engenharia mandar manter uma estação PCM no histórico antigo |
 
-### Página 4 — Cópia dos CSVs para a rede
+> Esta página existe separada da página 3 desde a v1.0.5. Até então Senha e
+> Tabela ficavam juntas com os outros 4 campos na mesma tela (6 no total) e,
+> em telas menores, os dois últimos campos ficavam fora da área visível do
+> assistente — o técnico via só 4 campos e, ao clicar Avançar, o instalador
+> acusava "informe a senha do banco" sem ela nunca ter aparecido. Se isso
+> acontecer numa versão anterior, atualize para a v1.0.5.
+
+### Página 5 — Cópia dos CSVs para a rede
 
 | Situação | O que preencher |
 |---|---|
@@ -212,14 +224,14 @@ Todos os campos do wizard aceitam parâmetro de linha de comando. Com
 
 ```powershell
 # Caiapó — Teste Funcional (rodar como Administrador, logado na conta do operador)
+# /DBHOST não precisa ser passado — o padrão já é o servidor de produção
 .\MES_Client_Setup_v1.0.5.exe /SILENT /PREFIX=FUNC /MODEL=A08 /MACHINE=CAIAPO-M13 `
-    /TESTER=AUTO /LINE=CAIAPO /CSV="D:\battData" /SYNC="" `
-    /DBHOST=<host> /DBPASS=<senha do mes_user>
+    /TESTER=AUTO /LINE=CAIAPO /CSV="D:\battData" /SYNC="" /DBPASS=<senha do mes_user>
 
 # PCM Tester (mantém o comportamento das versões anteriores)
 .\MES_Client_Setup_v1.0.5.exe /SILENT /PREFIX=PCM /MODEL=A17 /MACHINE=BR-PCMTEST-03 `
     /LINE=NAVAJO /CSV="D:\Testpad software\CSV\A17" `
-    /SYNC="\\<host>\NonAlphaSec2Info\logs\A17" /DBHOST=<host> /DBPASS=<senha>
+    /SYNC="\\172.21.70.184\NonAlphaSec2Info\logs\A17" /DBPASS=<senha>
 ```
 
 | Parâmetro | Padrão | Obrigatório no silencioso? |
@@ -231,14 +243,14 @@ Todos os campos do wizard aceitam parâmetro de linha de comando. Com
 | `/LINE` | `NAVAJO` | não |
 | `/CSV` | sugestão por tipo | não |
 | `/SYNC` | vazio (desligado) | não |
-| `/DBHOST` | — | **sim** (a menos que já exista `config.yaml`) |
+| `/DBHOST` | `172.21.70.184` | não — só passe se instalar contra outro servidor |
 | `/DBPORT` `/DBNAME` `/DBUSER` | `5432` `mes_db` `mes_user` | não |
 | `/DBPASS` | — | **sim** |
 | `/TABLE` | `mes_results` | não |
 
-Sem `/DBHOST` ou `/DBPASS` o instalador **aborta com mensagem** em vez de
-gravar um config incompleto. Com `/SILENT` o cliente **não** é iniciado ao
-final; inicie pelo atalho ou faça logoff/logon (a tarefa dispara).
+Sem `/DBPASS` o instalador **aborta com mensagem** em vez de gravar um config
+incompleto. Com `/SILENT` o cliente **não** é iniciado ao final; inicie pelo
+atalho ou faça logoff/logon (a tarefa dispara).
 
 **Nunca grave a linha com `/DBPASS` em `.bat`, `.ps1` ou histórico.** Se
 precisar de um script para várias estações, leia a senha com `Read-Host

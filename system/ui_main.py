@@ -46,6 +46,7 @@ from PIL import Image, ImageDraw, ImageTk
 from config.loader import load_config, load_raw_config, save_config, get_base_path
 from monitor.file_monitor import start_monitor
 from state.app_context import runtime_status
+from state.runtime_status import CLIENT_VERSION
 from system.single_instance import SingleInstance
 from logs.logger_setup import get_logger
 
@@ -1238,11 +1239,11 @@ class MESClientUI:
             tk.Label(
                 self.about_window,
                 text=(
-                    "Versão 1.0\n\n"
+                    f"Versão {CLIENT_VERSION}\n\n"
                     "Criado: 03-2026\n\n"
-                    "Autor: Roberto Parente\n"
-                    "Engenharia de Teste - Manaus\n\n"
-                    "Parser universal para logs CYG / PCM Tester\n"
+                    "By Parente\n"
+                    "Engenharia de Testes Manaus\n\n"
+                    "Parser universal para logs CYG / PCM Tester / P2500S\n"
                     "com detecção automática de modelo e schema"
                 ),
                 bg=self.bg_main,
@@ -1870,7 +1871,7 @@ class MESClientUI:
             separator()
 
             # ── Versão ────────────────────────────────────────────────────
-            tk.Label(inner, text="MES Client v1.0  •  Engenharia de Teste — Salcomp Manaus  •  Junho 2026",
+            tk.Label(inner, text=f"MES Client v{CLIENT_VERSION}  •  By Parente — Engenharia de Testes Manaus",
                      bg=self.bg_main, fg="#555555",
                      font=("Segoe UI", 8)).pack(pady=(16, 20))
 

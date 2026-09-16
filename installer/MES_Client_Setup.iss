@@ -10,12 +10,11 @@
 ;
 ; Instalacao silenciosa (sem wizard), para escalar em varias estacoes:
 ;   MES_Client_Setup_v1.0.5.exe /SILENT /PREFIX=FUNC /MODEL=A08 /MACHINE=CAIAPO-M13
-;       /TESTER=P2500S /LINE=CAIAPO /CSV="D:\battData" /SYNC=""
-;       /DBHOST=10.0.0.1 /DBPASS=senha_do_mes_user
-;   Parametros opcionais (com padrao): /DBPORT=5432 /DBNAME=mes_db /DBUSER=mes_user
-;       /TABLE=mes_results /PREFIX=PCM /TESTER=AUTO
-;   /DBHOST e /DBPASS sao obrigatorios em modo silencioso (o instalador aborta
-;   com mensagem se faltarem). Nunca grave a linha com /DBPASS em arquivo.
+;       /TESTER=P2500S /LINE=CAIAPO /CSV="D:\battData" /SYNC="" /DBPASS=senha_do_mes_user
+;   Parametros opcionais (com padrao): /DBHOST=172.21.70.184 /DBPORT=5432
+;       /DBNAME=mes_db /DBUSER=mes_user /TABLE=mes_results /PREFIX=PCM /TESTER=AUTO
+;   /DBPASS e' obrigatorio em modo silencioso (o instalador aborta com mensagem
+;   se faltar). Nunca grave a linha com /DBPASS em arquivo.
 ; ==============================================================================
 
 #define AppName      "MES Client"
@@ -79,8 +78,8 @@ Name: "ptBR"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 ; ==============================================================================
 [Messages]
 ptBR.WelcomeLabel1=Bem-vindo ao instalador do [name]
-ptBR.WelcomeLabel2=Este assistente instalara o [name/ver] nesta estacao de teste.%n%nAntes de continuar, preencha as informacoes da estacao nas proximas telas.%n%nClique em Avancar para continuar.
-ptBR.FinishedLabel=A instalacao do [name] foi concluida com sucesso.%n%nClique em Concluir para fechar este assistente.
+ptBR.WelcomeLabel2=Este assistente instalara o [name/ver] nesta estacao de teste.%n%nAntes de continuar, preencha as informacoes da estacao nas proximas telas.%n%nClique em Avancar para continuar.%n%nBy Parente - Engenharia de Testes Manaus
+ptBR.FinishedLabel=A instalacao do [name] foi concluida com sucesso.%n%nClique em Concluir para fechar este assistente.%n%nBy Parente - Engenharia de Testes Manaus
 
 ; ==============================================================================
 [Files]
@@ -140,10 +139,20 @@ var
   { Pagina 2: Linha de producao e pasta CSV }
   PageConfig: TInputQueryWizardPage;
 
-  { Pagina 3: Banco de dados }
+  { Pagina 3: Banco de dados - conexao (host, porta, nome, usuario) }
   PageBanco: TInputQueryWizardPage;
 
-  { Pagina 4: Copia para a rede (Samba) }
+  { Pagina 4: Banco de dados - senha e tabela, em pagina propria.
+    Ate a v1.0.5 estes dois campos ficavam juntos com os 4 de cima (6 campos
+    na mesma pagina). O TInputQueryWizardPage do Inno Setup nao redimensiona
+    a janela do wizard por pagina: com 6 campos e rotulos longos, os dois
+    ultimos (Senha e Tabela) ficavam fora da area visivel — o tecnico via so
+    4 campos e, ao clicar Avancar, o instalador acusava "informe a senha"
+    sem ela nunca ter aparecido na tela. Separar em pagina propria garante
+    que a senha sempre fica visivel. }
+  PageSenha: TInputQueryWizardPage;
+
+  { Pagina 5: Copia para a rede (Samba) }
   PageSync: TInputQueryWizardPage;
 
   { Ultimo valor que o instalador sugeriu sozinho para a pasta CSV / Samba.
@@ -238,23 +247,39 @@ begin
   PageBanco.Add('Porta PostgreSQL:', False);
   PageBanco.Add('Nome do banco:', False);
   PageBanco.Add('Usuário do banco:', False);
-  PageBanco.Add('Senha do banco:', True);  { True = oculta a senha }
-  PageBanco.Add('Tabela de resultados:', False);
 
-  { Host e senha NAO tem valor padrao de proposito: este arquivo esta num
-    repositorio publico e o instalador compilado circula em pendrive. O
-    tecnico recebe host e senha da engenharia e digita na instalacao (ou
-    passa /DBHOST e /DBPASS no modo silencioso). }
-  PageBanco.Values[0] := Param('DBHOST', '');
+  { Host tem padrao porque so existe um servidor de producao (172.21.70.184).
+    Nao e' segredo — e' o endereco interno da rede da fabrica, ja documentado
+    em varios arquivos deste repositorio. A SENHA continua sem padrao aqui de
+    proposito: este .iss e' publico no GitHub, e gravar a senha real do banco
+    num arquivo que qualquer pessoa pode ler tornaria a credencial permanente
+    (mesmo apagada depois, continuaria recuperavel pelo historico do Git —
+    exatamente o problema que o commit 20e76ef corrigiu). O tecnico digita a
+    senha na instalacao (pagina seguinte) ou passa /DBPASS no modo silencioso,
+    nunca gravado em arquivo. }
+  PageBanco.Values[0] := Param('DBHOST', '172.21.70.184');
   PageBanco.Values[1] := Param('DBPORT', '5432');
   PageBanco.Values[2] := Param('DBNAME', 'mes_db');
   PageBanco.Values[3] := Param('DBUSER', 'mes_user');
-  PageBanco.Values[4] := Param('DBPASS', '');
-  PageBanco.Values[5] := Param('TABLE',  'mes_results');
 
-  { --- PAGINA 4: Copia para a rede --- }
-  PageSync := CreateInputQueryPage(
+  { --- PAGINA 4: Senha e tabela (separada da pagina 3, ver comentario na
+    declaracao de PageSenha acima) --- }
+  PageSenha := CreateInputQueryPage(
     PageBanco.ID,
+    'Credenciais do Banco de Dados',
+    'Senha de acesso e tabela de resultados',
+    'A senha é gravada apenas no arquivo .env da estação, nunca no config.yaml.'
+  );
+
+  PageSenha.Add('Senha do banco:', True);  { True = oculta a senha }
+  PageSenha.Add('Tabela de resultados:', False);
+
+  PageSenha.Values[0] := Param('DBPASS', '');
+  PageSenha.Values[1] := Param('TABLE',  'mes_results');
+
+  { --- PAGINA 5: Copia para a rede --- }
+  PageSync := CreateInputQueryPage(
+    PageSenha.ID,
     'Cópia dos CSVs para a rede',
     'Compartilhamento de destino (opcional)',
     'Se esta estação também deve copiar os CSVs para um compartilhamento de rede, informe a pasta UNC. Deixe vazio para não copiar.'
@@ -335,7 +360,8 @@ begin
     PageConfig.Values[0] := UpperCase(Trim(PageConfig.Values[0]));
   end;
 
-  { Host e senha nao tem padrao - sem validacao, o tecnico passaria batido e a
+  { Host tem padrao (172.21.70.184) mas ainda assim confere: se o tecnico
+    apagou o campo para digitar outro servidor e deixou vazio por engano, a
     estacao ficaria sem conseguir conectar, com erro so' aparecendo no log. }
   if CurPageID = PageBanco.ID then begin
     if Trim(PageBanco.Values[0]) = '' then begin
@@ -345,7 +371,15 @@ begin
       Exit;
     end;
 
-    if Trim(PageBanco.Values[4]) = '' then begin
+    { Sugere o share so agora, que o host do banco e' conhecido }
+    Novo := SugerirSync(PageEstacao.Values[0], PageEstacao.Values[1], Trim(PageBanco.Values[0]));
+    if (Trim(PageSync.Values[0]) = '') or (PageSync.Values[0] = SyncSugerido) then
+      PageSync.Values[0] := Novo;
+    SyncSugerido := Novo;
+  end;
+
+  if CurPageID = PageSenha.ID then begin
+    if Trim(PageSenha.Values[0]) = '' then begin
       MsgBox('Informe a senha do banco.' + #13#10 +
              'Ela sera gravada no arquivo .env da estacao, nunca no config.yaml.',
              mbError, MB_OK);
@@ -353,14 +387,8 @@ begin
       Exit;
     end;
 
-    if Trim(PageBanco.Values[5]) = '' then
-      PageBanco.Values[5] := 'mes_results';
-
-    { Sugere o share so agora, que o host do banco e' conhecido }
-    Novo := SugerirSync(PageEstacao.Values[0], PageEstacao.Values[1], Trim(PageBanco.Values[0]));
-    if (Trim(PageSync.Values[0]) = '') or (PageSync.Values[0] = SyncSugerido) then
-      PageSync.Values[0] := Novo;
-    SyncSugerido := Novo;
+    if Trim(PageSenha.Values[1]) = '' then
+      PageSenha.Values[1] := 'mes_results';
   end;
 end;
 
@@ -381,10 +409,8 @@ begin
   Prefixo := UpperCase(Trim(PageEstacao.Values[0]));
   Tester  := UpperCase(Trim(PageEstacao.Values[3]));
 
-  if Trim(PageBanco.Values[4]) = '' then
+  if Trim(PageSenha.Values[0]) = '' then
     Result := 'Modo silencioso: informe /DBPASS=<senha do banco>.'
-  else if (Trim(PageBanco.Values[0]) = '') and not FileExists(ExpandConstant('{app}\config.yaml')) then
-    Result := 'Modo silencioso: informe /DBHOST=<host do PostgreSQL>.'
   else if (Prefixo <> 'PCM') and (Prefixo <> 'FUNC') and (Prefixo <> 'TABC') then
     Result := 'Modo silencioso: /PREFIX deve ser PCM, FUNC ou TABC.'
   else if (Tester <> 'AUTO') and (Tester <> 'PCM_TESTER') and (Tester <> 'CYG') and (Tester <> 'P2500S') then
@@ -464,8 +490,8 @@ begin
   DbPort     := Trim(PageBanco.Values[1]);
   DbName     := Trim(PageBanco.Values[2]);
   DbUser     := Trim(PageBanco.Values[3]);
-  DbPass     := Trim(PageBanco.Values[4]);
-  DbTable    := Trim(PageBanco.Values[5]);
+  DbPass     := Trim(PageSenha.Values[0]);
+  DbTable    := Trim(PageSenha.Values[1]);
   SyncDest   := Trim(PageSync.Values[0]);
   SyncOn     := SyncDest <> '';
   IsPcm      := Tester = 'PCM_TESTER';
@@ -661,7 +687,7 @@ begin
     Space + 'Testador    : ' + UpperCase(Trim(PageEstacao.Values[3]))       + NewLine +
     Space + 'Linha       : ' + UpperCase(Trim(PageConfig.Values[0]))        + NewLine +
     Space + 'Pasta CSV   : ' + Trim(PageConfig.Values[1])                   + NewLine +
-    Space + 'Banco       : ' + Trim(PageBanco.Values[0]) + ':' + Trim(PageBanco.Values[1]) + '/' + Trim(PageBanco.Values[2]) + '  tabela ' + Trim(PageBanco.Values[5]) + NewLine +
+    Space + 'Banco       : ' + Trim(PageBanco.Values[0]) + ':' + Trim(PageBanco.Values[1]) + '/' + Trim(PageBanco.Values[2]) + '  tabela ' + Trim(PageSenha.Values[1]) + NewLine +
     Space + 'Cópia rede  : ' + SyncTxt                                      + NewLine +
     NewLine +
     'Ações que serão executadas:' + NewLine +

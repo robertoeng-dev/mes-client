@@ -5,10 +5,31 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-## [1.0.5] — 2026-09-15
+## [1.0.5] — 2026-09-16
 
 Primeira versão a rodar fora das estações PCM Tester: linha Caiapó (BW P2500S,
 modelo A08). Nenhuma mudança de comportamento para as estações já instaladas.
+
+### Corrigido (16/09)
+
+- **Campo "Senha do banco" invisível no instalador.** A página "Configuração
+  do Banco de Dados" tinha 6 campos (Host, Porta, Nome, Usuário, Senha,
+  Tabela). O `TInputQueryWizardPage` do Inno Setup não redimensiona a janela
+  do wizard por página; em telas menores os dois últimos campos ficavam fora
+  da área visível — o técnico via só 4 campos e, ao clicar Avançar, o
+  instalador acusava "informe a senha do banco" sem ela nunca ter aparecido
+  na tela. Senha e Tabela agora têm página própria ("Credenciais do Banco de
+  Dados"), e nenhuma página do wizard passa de 4 campos.
+- **Host do PostgreSQL vem pré-preenchido** (`172.21.70.184`, o único
+  servidor de produção) nas páginas 3 e no modo `/SILENT` — antes o técnico
+  precisava digitar o IP a cada instalação. A senha continua **sem** valor
+  padrão: gravar a senha real do banco no `.iss`, que é público no GitHub,
+  tornaria a credencial permanente no histórico do repositório (o mesmo
+  problema que o commit `20e76ef` corrigiu). Ela é digitada na instalação ou
+  passada via `/DBPASS`, nunca gravada em arquivo.
+- **Crédito do autor** adicionado às telas de boas-vindas e conclusão do
+  instalador, e à tela ABOUT do cliente (que também passou a mostrar a
+  versão em execução em vez de "1.0" fixo).
 
 ### Adicionado
 
