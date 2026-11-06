@@ -5,14 +5,57 @@
 > **Branch `proteus-2.0` — em homologação.** Esta branch é o cliente 2.0 da plataforma **Proteus**.
 > As fontes de log de cada estação são cadastradas no [Proteus — Servidor de Gerenciamento](https://github.com/robertoeng-dev/proteus) e vinculadas neste PC pela tela **FONTES DESTE PC**.
 > Veja o [CHANGELOG](CHANGELOG.md#200--em-homologação-branch-proteus-20).
-> O texto abaixo ainda descreve a v1.0.5 e será revisado na fase F4 (instalador + Windows 7). A versão em produção continua no `main`.
+> A versão em produção (v1.0.5) continua no `main`. As seções depois de **Edições** ainda descrevem a v1.0.5 em vários pontos.
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20%7C%207%20SP1-0078D6?logo=windows&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13%2B-336791?logo=postgresql&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/Version-1.0.5-blue)
+![Version](https://img.shields.io/badge/Version-2.0.0-blue)
 ![Status](https://img.shields.io/badge/Status-Production-brightgreen)
+
+---
+
+## Edições: Windows 10/11 e Windows 7
+
+O código é um só. Cada sistema operacional tem o seu próprio build e o seu próprio instalador, que **não se misturam**:
+
+| | Windows 10/11 | Windows 7 SP1 |
+|---|---|---|
+| Onde fica | raiz do projeto | pasta [`win7/`](win7/LEIA-ME.md) |
+| Python | 3.13 | 3.8.10 (32 bits) |
+| Spec | `parser_TE.spec` | `win7/MES_Client_Win7.spec` |
+| Instalador | `installer/MES_Client_Setup.iss` | `win7/installer/MES_Client_Setup_Win7.iss` |
+| Arquivo gerado | `Proteus_Client_Setup_v2.0.0.exe` | `Proteus_Client_Setup_v2.0.0-win7.exe` |
+
+**Qual instalar:** Windows 10/11 → o arquivo sem sufixo. Windows 7 → o `-win7`. O instalador Win10 se recusa a rodar no Windows 7.
+
+### Instalar (2.0)
+
+1. Rode o instalador da edição certa como administrador.
+2. Escolha o **domínio** (Non-Alpha ou Alpha). Banco e usuário são preenchidos sozinhos.
+3. Digite a **senha** do banco das estações. Ela é gravada só no `.env`.
+4. Opcional: informe a **estação**, a **fonte** e a **pasta** do log. Se deixar vazio, a tela FONTES DESTE PC abre no primeiro start.
+
+Instalação silenciosa (não grave esta linha em arquivo, por causa da senha):
+
+```bat
+Proteus_Client_Setup_v2.0.0.exe /SILENT /DOMINIO=NONALPHA /DBPASS=<senha> /STATION=CAIAPO-M13-FT /FONTE=FT /PASTA="D:\battData"
+```
+
+Uma estação com a v1.0.5 é atualizada por cima. O config antigo, a fila offline e os offsets viram `*.v105.bak`.
+
+### Compilar (Windows 10/11)
+
+```bat
+.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean parser_TE.spec
+```
+
+```bat
+"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\MES_Client_Setup.iss
+```
+
+Para a edição Windows 7, veja [win7/LEIA-ME.md](win7/LEIA-ME.md).
 
 ---
 

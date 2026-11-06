@@ -169,7 +169,7 @@ class MESClientUI:
         self.icon = pystray.Icon(
             "MES_Client",
             self._create_icon("yellow"),
-            "MES Client",
+            "Proteus Client",
         )
 
     # -------------------------------------------------------------------------
@@ -640,7 +640,7 @@ class MESClientUI:
         eng_pwd = str(auth.get("engenharia_password", "engenharia"))
 
         win = tk.Toplevel(self.root)
-        win.title("MES Client — Login")
+        win.title("Proteus Client — Login")
         win.configure(bg=self.bg_main)
         win.resizable(False, False)
         win.iconphoto(False, self._window_icon)
@@ -908,7 +908,7 @@ class MESClientUI:
 
     def _startup_feedback(self):
         try:
-            self.icon.notify("MES Client iniciado",
+            self.icon.notify("Proteus Client iniciado",
                              "Parser rodando. Monitorando logs, banco e sincronização.")
         except Exception:
             pass
@@ -1010,7 +1010,7 @@ class MESClientUI:
 
             self.status_window = tk.Toplevel(self.root)
             _geo, _sw, _sh = self._dynamic_geometry(0.62, 0.82, 700, 560, max_w=1100, max_h=920)
-            self._style_window(self.status_window, "STATUS - MES Client", _geo)
+            self._style_window(self.status_window, "STATUS - Proteus Client", _geo)
             self.status_window.protocol("WM_DELETE_WINDOW", self.status_window.destroy)
             self._register_window(self.status_window)
 
@@ -1650,7 +1650,7 @@ class MESClientUI:
                 self.ajuda_window.transient(self.root)
 
             _geo, _aw, _ah = self._dynamic_geometry(0.58, 0.85, 680, 580, max_w=860, max_h=920)
-            self._style_window(self.ajuda_window, "Ajuda — MES Client", _geo)
+            self._style_window(self.ajuda_window, "Ajuda — Proteus Client", _geo)
 
             def _close_ajuda():
                 self.ajuda_window.destroy()
@@ -1749,9 +1749,9 @@ class MESClientUI:
             # ══════════════════════════════════════════════════════════════
             # SEÇÃO: Visão Geral
             # ══════════════════════════════════════════════════════════════
-            sec_title("O que é o MES Client?", "📋")
+            sec_title("O que é o Proteus Client?", "📋")
             body(
-                "O MES Client é uma aplicação Windows que roda 24h/7d em estações de teste "
+                "O Proteus Client é uma aplicação Windows que roda 24h/7d em estações de teste "
                 "industrial. Ele monitora automaticamente arquivos CSV gerados pelos testadores "
                 "(PCM Tester / CYG), processa os resultados e envia ao banco de dados PostgreSQL "
                 "para rastreabilidade e análise de qualidade de produção."
@@ -1900,7 +1900,7 @@ class MESClientUI:
             separator()
 
             # ── Versão ────────────────────────────────────────────────────
-            tk.Label(inner, text=f"MES Client v{CLIENT_VERSION}  •  By Parente — Engenharia de Testes Manaus",
+            tk.Label(inner, text=f"Proteus Client v{CLIENT_VERSION}  •  By Parente — Engenharia de Testes Manaus",
                      bg=self.bg_main, fg="#555555",
                      font=("Segoe UI", 8)).pack(pady=(16, 20))
 
@@ -2498,7 +2498,7 @@ class MESClientUI:
 
             tk.Label(
                 dlg,
-                text="Deseja realmente encerrar o MES Client?\n\n"
+                text="Deseja realmente encerrar o Proteus Client?\n\n"
                      "Ele foi projetado para funcionar 24 h/dia\n"
                      "e iniciar automaticamente com o Windows.",
                 bg="#141414", fg="#e2e2e2",
@@ -2563,7 +2563,7 @@ if __name__ == "__main__":
     if not instance.acquire():
         # Dialog dark inline — MESClientApp ainda não foi criado
         dlg = tk.Toplevel(root)
-        dlg.title("MES Client")
+        dlg.title("Proteus Client")
         dlg.configure(bg="#141414")
         dlg.resizable(False, False)
         dlg.attributes("-topmost", True)
@@ -2572,7 +2572,7 @@ if __name__ == "__main__":
         dlg.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
         hdr = tk.Frame(dlg, bg="#3a2d00", height=38)
         hdr.pack(fill="x"); hdr.pack_propagate(False)
-        tk.Label(hdr, text="  ⚠   MES Client", bg="#3a2d00", fg="#ffbb33",
+        tk.Label(hdr, text="  ⚠   Proteus Client", bg="#3a2d00", fg="#ffbb33",
                  font=("Segoe UI", 10, "bold")).pack(side="left", padx=8, pady=9)
         tk.Label(dlg,
                  text="Já existe uma instância do parser em execução nesta estação.",
@@ -2601,13 +2601,13 @@ if __name__ == "__main__":
         app = MESClientUI()
         app.run()
     except Exception as e:
-        logger.exception(f"Falha fatal no arranque do MES Client: {e}")
+        logger.exception(f"Falha fatal no arranque do Proteus Client: {e}")
         try:
             err = tk.Tk()
             err.withdraw()
             messagebox.showerror(
-                "MES Client — falha ao iniciar",
-                f"O MES Client não conseguiu iniciar.\n\n{type(e).__name__}: {e}\n\n"
+                "Proteus Client — falha ao iniciar",
+                f"O Proteus Client não conseguiu iniciar.\n\n{type(e).__name__}: {e}\n\n"
                 f"Detalhes completos em:\n{os.path.join(get_base_path(), 'logs', 'client.log')}"
             )
             err.destroy()

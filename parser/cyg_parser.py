@@ -344,7 +344,9 @@ def parse_appended_rows(file_path, last_state, station_type="AUTO"):
             if not line.endswith("\n"):
                 break   # linha incompleta (testador ainda escrevendo) — para aqui
 
-            complete_lines.append(line)
+            # NUL vira U+FFFD: o csv do Python 3.8 (edição Win7) aborta o arquivo
+            # inteiro com "line contains NUL"; os dois contam igual como lixo.
+            complete_lines.append(line.replace("\x00", "\ufffd"))
             new_offset = f.tell()   # posição APÓS esta linha — próximo ponto de início
 
     if not complete_lines:

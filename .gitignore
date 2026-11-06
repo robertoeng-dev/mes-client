@@ -82,3 +82,11 @@ assets/app.ico
 # --- Artefatos temporarios ---
 assets/screenshots/*.jpg
 ~$*
+
+# --- Edicao Windows 7 ---
+# Pre-requisitos da Microsoft (UCRT KB2999226): binarios de terceiros, ficam fora do git.
+win7/prereqs/
+*.msu
+.venv38/
+cadastro_cache.json
+*.v105.bak

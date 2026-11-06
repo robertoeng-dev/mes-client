@@ -14,6 +14,7 @@ import hashlib
 from datetime import datetime
 
 from config.column_mapper import resolve_field
+from parser.configuravel import iso_flexivel
 from logs.logger_setup import get_logger
 
 logger = get_logger()
@@ -48,10 +49,9 @@ def _parse_test_time(raw, context=""):
         return datetime.strptime(raw, "%Y%m%d%H%M%S")
     except ValueError:
         pass
-    try:
-        return datetime.fromisoformat(raw)
-    except ValueError:
-        pass
+    dt = iso_flexivel(raw)          # inclui Z, fração curta e ISO compacto (Python 3.8)
+    if dt is not None:
+        return dt
     logger.warning("Formato de data/hora nao reconhecido"
                    + (" (%s)" % context if context else "")
                    + ": %r — gravado como NULL" % raw)

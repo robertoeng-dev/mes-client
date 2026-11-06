@@ -1,0 +1,10 @@
+# Dependencias do build para WINDOWS 7 SP1 (32 bits, roda tambem em Win7 64 bits).
+# O Python 3.9+ nao roda no Windows 7: este build usa Python 3.8.10, o ultimo
+# instalador oficial compativel. Cada versao abaixo e' a ultima com wheel cp38-win32.
+# NAO use este arquivo para a edicao Windows 10 (essa usa requirements.txt).
+pystray==0.19.5
+pillow==10.4.0
+psycopg2-binary==2.9.9
+PyYAML==6.0.2
+pyinstaller==5.13.2
+pyinstaller-hooks-contrib==2024.7

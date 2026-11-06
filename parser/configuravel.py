@@ -241,7 +241,9 @@ def parse_appended_rows(caminho, last_state, definicao, max_linhas=None):
             linha = f.readline()
             if not linha or not linha.endswith("\n"):
                 break
-            linhas.append(linha)
+            # NUL vira U+FFFD: o csv do Python 3.8 aborta o arquivo inteiro com
+            # "line contains NUL"; os dois contam igual como lixo (garbage_chars).
+            linhas.append(linha.replace("\x00", "\ufffd"))
             novo_offset = f.tell()
 
     rows, skipped = [], []
@@ -288,6 +290,25 @@ def normalizar_resultado(valor, definicao=None):
     return v
 
 
+def iso_flexivel(texto):
+    """fromisoformat que aceita no Python 3.8 (edição Win7) o mesmo que o 3.11+:
+    sufixo Z, fração com 1 a 6 dígitos e ISO compacto (YYYYMMDDTHHMMSS).
+    Devolve datetime, ou None se o texto não for ISO 8601."""
+    texto = str(texto).strip()
+    try:
+        return datetime.strptime(texto, "%Y%m%dT%H%M%S")
+    except ValueError:
+        pass
+    iso = texto[:-1] + "+00:00" if texto.endswith("Z") else texto
+    m = re.match(r"^(.*[T ]\d{2}:\d{2}:\d{2})\.(\d{1,6})(.*)$", iso)
+    if m:
+        iso = "%s.%s%s" % (m.group(1), m.group(2).ljust(6, "0"), m.group(3))
+    try:
+        return datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+
+
 def converter_data(valor, formato=""):
     """Texto → 'YYYY-MM-DD HH:MM:SS' (hora local da planta), ou None.
     Nunca adivinha: formato desconhecido vira None."""
@@ -301,10 +322,8 @@ def converter_data(valor, formato=""):
             return datetime.strptime(texto, fmt).strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
             pass
-    try:
-        return datetime.fromisoformat(texto).strftime("%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        return None
+    dt = iso_flexivel(texto)
+    return dt.strftime("%Y-%m-%d %H:%M:%S") if dt else None
 
 
 def extrair_campos(row, definicao):

@@ -10,7 +10,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 Cliente da plataforma **Proteus**. A estação deixa de ter "uma pasta, um formato e um Station ID digitado" e passa a ter **fontes de log cadastradas no servidor** ([Proteus — Servidor de Gerenciamento](https://github.com/robertoeng-dev/proteus)). O cliente só lê o cadastro e vincula as fontes deste PC.
 
 > **Não é compatível com a v1.0.5**: o banco recomeça do zero (`mes_nonalpha` / `mes_alpha`, schema 2) e cada estação é reinstalada.
-> O instalador ainda gera o config 1.0.5 e será ajustado na fase F4, junto com o port para Windows 7. Até lá, a v1.0.5 continua no `main`.
+> Até a homologação terminar, a v1.0.5 continua no `main`.
 
 ### Adicionado
 
@@ -40,6 +40,28 @@ Cliente da plataforma **Proteus**. A estação deixa de ter "uma pasta, um forma
 - Paridade com a v1.0.5 nos logs reais: **122.611 linhas P2500S** (M13, 18 CSVs) e **49.536 linhas OCV** (M2, 9 CSVs) idênticas.
 - `test_cliente_f2.py`: 47 ok, com o monitor real contra o PostgreSQL de homologação.
 - Tela FONTES: 14 ok.
+
+
+### Fase F4 — instaladores e edição Windows 7 (06/11/2026)
+
+- **Nome exibido: Proteus Client.** Bandeja, janelas, atalho e Painel de Controle mostram o novo nome. Os nomes técnicos não mudam (`MES_Client.exe`, tarefa `MES_Client_Autostart`, `C:\Utility\MES`), para a 2.0 instalar por cima da v1.0.5.
+- **Instalador 2.0**, com uma edição para cada sistema operacional:
+  - Windows 10/11: `installer/MES_Client_Setup.iss` gera `Proteus_Client_Setup_v2.0.0.exe` (Windows 8.1 ou mais novo).
+  - Windows 7 SP1: `win7/installer/MES_Client_Setup_Win7.iss` gera `Proteus_Client_Setup_v2.0.0-win7.exe` (KB2533623 conferido, UCRT embutido).
+  - Telas: Domínio (Non-Alpha/Alpha), Banco, Senha (vai para o `.env`), Fonte deste PC (opcional).
+  - Silencioso: `/DOMINIO /DBPASS /STATION /FONTE /PASTA /SYNC` (e `/DBHOST /DBPORT /DBNAME /DBUSER`).
+  - Atualização da v1.0.5: o `config.yaml`, a fila offline e os offsets antigos viram `*.v105.bak` e um config 2.0 é gerado. Um config que já é 2.0 é preservado.
+  - Encerra a tarefa e o cliente antes de copiar e remove o atalho antigo "MES Client". Uma falha do `schtasks` é avisada nas duas edições.
+- **Edição Windows 7 gerada do mesmo código** (`win7/gerar_edicao_win7.py`): renomeia `parser/` para `csvparser/` e reescreve os imports. Nada é mantido à mão em duas cópias. Veja [win7/LEIA-ME.md](win7/LEIA-ME.md).
+- **Python 3.8 lê igual ao 3.13:**
+  - datas ISO 8601 com `Z`, fração curta ou formato compacto (`iso_flexivel`);
+  - byte NUL no CSV não aborta mais o arquivo: a linha suja é rejeitada.
+- Os scripts PowerShell da v1.0.5 foram para `installer/legado_v1.0.5/`.
+- `parser_TE.spec` inclui os módulos novos da 2.0 (`parser.campos`, `parser.configuravel`, `parser.registry`, `state.station_cache`, `system.ui_fontes`).
+- Testes:
+  - `test_compat_py38.py` (novo);
+  - no Python 3.13 e no 3.8: `test_parser_validation`, `test_correcoes_fase_a`, `test_compat_py38` e `test_cliente_f2` (homologação, 0 falhas);
+  - paridade M13/M2 com a v1.0.5: 0 falhas.
 
 ---
 

@@ -1,35 +1,55 @@
 ; ==============================================================================
-; MES_Client_Setup.iss
-; Script Inno Setup - Instalador Profissional MES Client
+; MES_Client_Setup.iss  -  EDICAO WINDOWS 10/11
+; Script Inno Setup - Instalador do Proteus Client 2.0 (estacoes de teste)
 ; Salcomp - Engenharia de Teste | Manaus
 ; ==============================================================================
-; Como compilar:
-;   1. Abra este arquivo no Inno Setup IDE (Compil32.exe) e pressione F9, ou
-;   2. Linha de comando:  ISCC.exe installer\MES_Client_Setup.iss
-;   O instalador gerado fica em: installer\Output\MES_Client_Setup_v<versao>.exe
+; EDICAO WINDOWS 10/11 (Python 3.13, 64 bits).
+;   Compilar: ISCC.exe installer\MES_Client_Setup.iss
+;   Saida   : installer\Output\Proteus_Client_Setup_v2.0.0.exe
+;   Para Windows 7 NAO use este arquivo: a edicao Win7 fica separada em
+;   win7\ (win7\installer\MES_Client_Setup_Win7.iss, build win7\build_win7.bat).
+;
+; CLIENTE 2.0 = CADASTRO CENTRALIZADO. Estacao, linha, formato do log e padrao
+; de arquivo vem do servidor (Proteus - Servidor de Gerenciamento). O
+; instalador so grava:
+;   - a conexao com o banco do DOMINIO (Non-Alpha: mes_nonalpha; Alpha: mes_alpha)
+;   - a senha do role da estacao, no .env (nunca no config.yaml)
+;   - opcionalmente a PRIMEIRA fonte deste PC (estacao + fonte + pasta). Sem
+;     ela o cliente abre sozinho a tela FONTES DESTE PC no primeiro start.
+;
+; ATUALIZACAO DA v1.0.5: mesmo AppId, instala por cima em C:\Utility\MES. O
+; config.yaml da v1.0.5 (formato antigo, com "station:") nao serve para a 2.0:
+; ele, a fila offline e os offsets sao renomeados para *.v105.bak e um config
+; novo e' gerado. Um config.yaml que ja' e' 2.0 e' preservado.
 ;
 ; Instalacao silenciosa (sem wizard), para escalar em varias estacoes:
-;   MES_Client_Setup_v1.0.5.exe /SILENT /PREFIX=FUNC /MODEL=A08 /MACHINE=CAIAPO-M13
-;       /TESTER=P2500S /LINE=CAIAPO /CSV="D:\battData" /SYNC="" /DBPASS=senha_do_mes_user
-;   Parametros opcionais (com padrao): /DBHOST=172.21.70.184 /DBPORT=5432
-;       /DBNAME=mes_db /DBUSER=mes_user /TABLE=mes_results /PREFIX=PCM /TESTER=AUTO
-;   /DBPASS e' obrigatorio em modo silencioso (o instalador aborta com mensagem
-;   se faltar). Nunca grave a linha com /DBPASS em arquivo.
+;   Proteus_Client_Setup_v2.0.0.exe /SILENT /DOMINIO=NONALPHA /DBPASS=<senha>
+;       /STATION=CAIAPO-M13-FT /FONTE=FT /PASTA="D:\battData"
+;   Opcionais (com padrao): /DBHOST=172.21.70.184 /DBPORT=5432
+;       /DBNAME=mes_<dominio> /DBUSER=mes_client_<dominio> /SYNC=""
+;   /DOMINIO aceita NONALPHA ou ALPHA. /DBPASS e' obrigatorio no silencioso.
+;   Nunca grave a linha com /DBPASS em arquivo.
 ; ==============================================================================
 
-#define AppName      "MES Client"
-#define AppVersion   "1.0.5"
+#define AppName      "Proteus Client"
+#define AppVersion   "2.0.0"
 #define AppPublisher "Salcomp - Engenharia de Teste"
 #define AppCopyright "Salcomp Manaus 2026"
 #define InstallDir   "C:\Utility\MES"
+; Nomes tecnicos mantidos da v1.0.5 (atualizacao por cima, tarefa e mutex)
 #define ExeName      "MES_Client.exe"
+#define TaskName     "MES_Client_Autostart"
+
+#define Edicao     ""
+#define SufixoArq  ""
 
 ; ==============================================================================
 [Setup]
-; Identificacao unica do instalador (gere um novo GUID em Tools > Generate GUID)
+; Mesmo AppId da v1.0.5: a 2.0 atualiza a instalacao existente
 AppId={{A3F2C1D0-9B4E-4F7A-8C3D-1E6B2A0F5D9C}
 AppName={#AppName}
 AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion}{#Edicao}
 AppPublisherURL=https://salcomp.com.br
 AppSupportURL=https://salcomp.com.br
 AppCopyright={#AppCopyright}
@@ -44,7 +64,7 @@ DisableProgramGroupPage=yes
 
 ; Saida do instalador gerado
 OutputDir=Output
-OutputBaseFilename=MES_Client_Setup_v{#AppVersion}
+OutputBaseFilename=Proteus_Client_Setup_v{#AppVersion}{#SufixoArq}
 
 ; Icone do instalador
 SetupIconFile=..\assets\app.ico
@@ -65,11 +85,12 @@ WizardSizePercent=100
 WizardImageFile=..\assets\installer_banner.bmp
 WizardSmallImageFile=..\assets\installer_header.bmp
 
-; Versao minima do Windows (Windows 7 SP1+)
-MinVersion=6.1sp1
+; O exe da edicao Windows 10 e' Python 3.13, que nao roda no Windows 7/8.
+; Para Windows 7 use o Proteus_Client_Setup_v{#AppVersion}-win7.exe.
+MinVersion=6.3
 
 UninstallDisplayIcon={app}\{#ExeName}
-UninstallDisplayName={#AppName}
+UninstallDisplayName={#AppName}{#Edicao}
 
 ; ==============================================================================
 [Languages]
@@ -78,13 +99,13 @@ Name: "ptBR"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 ; ==============================================================================
 [Messages]
 ptBR.WelcomeLabel1=Bem-vindo ao instalador do [name]
-ptBR.WelcomeLabel2=Este assistente instalara o [name/ver] nesta estacao de teste.%n%nAntes de continuar, preencha as informacoes da estacao nas proximas telas.%n%nClique em Avancar para continuar.%n%nBy Parente - Engenharia de Testes Manaus
+ptBR.WelcomeLabel2=Este assistente instalara o [name/ver]{#Edicao} nesta estacao de teste.%n%nVoce vai precisar do dominio (Non-Alpha ou Alpha) e da senha do banco das estacoes. A estacao e a fonte de log podem ser vinculadas agora ou depois, na tela FONTES DESTE PC.%n%nClique em Avancar para continuar.%n%nBy Parente - Engenharia de Testes Manaus
 ptBR.FinishedLabel=A instalacao do [name] foi concluida com sucesso.%n%nClique em Concluir para fechar este assistente.%n%nBy Parente - Engenharia de Testes Manaus
 
 ; ==============================================================================
 [Files]
 ; EXE principal
-Source: "..\dist\MES_Client.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\{#ExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Limites de especificacao
 Source: "..\spec_limits.csv";        DestDir: "{app}"; Flags: ignoreversion
@@ -95,15 +116,21 @@ Source: "..\column_mappings.json";   DestDir: "{app}"; Flags: ignoreversion
 ; Icone (para o atalho e desinstalador)
 Source: "..\assets\app.ico";         DestDir: "{app}\assets"; Flags: ignoreversion
 
+
+; ==============================================================================
+[InstallDelete]
+; Atalho com o nome antigo (v1.0.5) - o novo se chama Proteus Client
+Type: files; Name: "{commondesktop}\MES Client.lnk"
+
 ; ==============================================================================
 [Icons]
 ; Atalho na area de trabalho de todos os usuarios
-Name: "{commondesktop}\MES Client"; Filename: "{app}\{#ExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"; Comment: "MES Client - Monitor de Teste Salcomp"
+Name: "{commondesktop}\{#AppName}"; Filename: "{app}\{#ExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\app.ico"; Comment: "Proteus Client - coleta dos logs de teste para o MES"
 
 ; ==============================================================================
 [Run]
-; Inicia o MES Client ao finalizar (opcional, usuario pode desmarcar)
-Filename: "{app}\{#ExeName}"; Description: "Iniciar MES Client agora"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}"
+; Inicia o cliente ao finalizar (opcional, usuario pode desmarcar)
+Filename: "{app}\{#ExeName}"; Description: "Iniciar o {#AppName} agora"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}"
 
 ; ==============================================================================
 [UninstallRun]
@@ -124,41 +151,36 @@ Type: files; Name: "{app}\.env"
 ; ==============================================================================
 [Code]
 { ============================================================================
-  Paginas customizadas do wizard para configuracao da estacao
-  Escrito em Pascal Script (linguagem nativa do Inno Setup)
+  Paginas customizadas do wizard (Pascal Script)
 
   Todos os campos aceitam valor pela linha de comando (/NOME=valor). Em modo
   /SILENT as paginas nao aparecem e os valores usados sao exatamente os dos
-  parametros (ou o padrao de cada campo).
+  parametros (ou o padrao de cada campo); a validacao fica no PrepareToInstall.
   ============================================================================ }
 
 var
-  { Pagina 1: Prefixo, modelo, ID da maquina, tipo do testador }
-  PageEstacao: TInputQueryWizardPage;
+  { Pagina 1: dominio (Non-Alpha / Alpha) - define banco e usuario padrao }
+  PageDominio: TInputOptionWizardPage;
 
-  { Pagina 2: Linha de producao e pasta CSV }
-  PageConfig: TInputQueryWizardPage;
-
-  { Pagina 3: Banco de dados - conexao (host, porta, nome, usuario) }
+  { Pagina 2: conexao (host, porta, banco, usuario) }
   PageBanco: TInputQueryWizardPage;
 
-  { Pagina 4: Banco de dados - senha e tabela, em pagina propria.
-    Ate a v1.0.5 estes dois campos ficavam juntos com os 4 de cima (6 campos
-    na mesma pagina). O TInputQueryWizardPage do Inno Setup nao redimensiona
-    a janela do wizard por pagina: com 6 campos e rotulos longos, os dois
-    ultimos (Senha e Tabela) ficavam fora da area visivel — o tecnico via so
-    4 campos e, ao clicar Avancar, o instalador acusava "informe a senha"
-    sem ela nunca ter aparecido na tela. Separar em pagina propria garante
-    que a senha sempre fica visivel. }
+  { Pagina 3: senha, em pagina propria. O TInputQueryWizardPage nao
+    redimensiona a janela: com muitos campos a senha ficava fora da area
+    visivel (problema real da v1.0.4). }
   PageSenha: TInputQueryWizardPage;
 
-  { Pagina 5: Copia para a rede (Samba) }
-  PageSync: TInputQueryWizardPage;
+  { Pagina 4: primeira fonte deste PC (opcional) }
+  PageFonte: TInputQueryWizardPage;
 
-  { Ultimo valor que o instalador sugeriu sozinho para a pasta CSV / Samba.
-    Se o tecnico nao mexeu, o instalador pode recalcular quando o modelo muda. }
-  CsvSugerido:  String;
-  SyncSugerido: String;
+  { Ultimos valores sugeridos sozinhos: se o tecnico nao mexeu, trocar o
+    dominio recalcula banco e usuario. }
+  NomeSugerido: String;
+  UserSugerido: String;
+
+  { /DOMINIO= com valor desconhecido - recusado no PrepareToInstall }
+  DominioInvalido: Boolean;
+
 
 
 { --------------------------------------------------------------------------
@@ -170,226 +192,232 @@ begin
 end;
 
 
+{ 'nonalpha' ou 'alpha', conforme a opcao marcada na pagina 1 }
+function Dominio: String;
+begin
+  if PageDominio.SelectedValueIndex = 1 then
+    Result := 'alpha'
+  else
+    Result := 'nonalpha';
+end;
+
+function DominioRotulo: String;
+begin
+  if Dominio = 'alpha' then Result := 'Alpha' else Result := 'Non-Alpha';
+end;
+
+
 { --------------------------------------------------------------------------
-  Sugestoes por tipo de estacao
-  PCM  : estacoes PCM Tester (TestPad) - CSV em subpastas por modelo
-  FUNC : Teste Funcional BW P2500S (Caiapo) - grava tudo em D:\battData
-  TABC : Tab Cutting BW P2500S (Caiapo)
+  CodigoValido: mesma regra do cadastro (dominio mes_codigo do banco):
+  so A-Z, 0-9 e "_" ou "-" entre eles, ate 40 caracteres. O texto ja chega
+  em maiusculas.
   -------------------------------------------------------------------------- }
-function SugerirCsv(Prefixo, Modelo: String): String;
+function CodigoValido(S: String): Boolean;
+var
+  I: Integer;
+  C: Char;
+  Separador: Boolean;
 begin
-  if Prefixo = 'PCM' then
-    Result := 'D:\Testpad software\CSV\' + Modelo
-  else
-    Result := 'D:\battData';
+  Result := False;
+  if (Length(S) = 0) or (Length(S) > 40) then
+    Exit;
+  Separador := True;   { nao pode comecar com separador }
+  for I := 1 to Length(S) do begin
+    C := S[I];
+    if ((C >= 'A') and (C <= 'Z')) or ((C >= '0') and (C <= '9')) then
+      Separador := False
+    else if (C = '_') or (C = '-') then begin
+      if Separador then
+        Exit;          { dois separadores seguidos, ou no comeco }
+      Separador := True;
+    end else
+      Exit;
+  end;
+  Result := not Separador;  { nem terminar com separador }
 end;
 
-function SugerirSync(Prefixo, Modelo, DbHost: String): String;
+
+{ Valor YAML entre aspas simples: barras invertidas ficam literais (pastas
+  do Windows e UNC) e a aspa simples e' dobrada. }
+function YamlStr(S: String): String;
 begin
-  { Nas estacoes PCM o servidor de arquivos e o mesmo host do banco. Nas
-    demais linhas nao ha essa coincidencia - fica vazio e o tecnico preenche
-    se houver share definido. Vazio = sync desligado. }
-  if (Prefixo = 'PCM') and (DbHost <> '') then
-    Result := '\\' + DbHost + '\NonAlphaSec2Info\logs\' + Modelo
-  else
-    Result := '';
+  StringChangeEx(S, '''', '''''', True);
+  Result := '''' + S + '''';
 end;
 
 
 { --------------------------------------------------------------------------
-  InitializeWizard: executado uma vez ao abrir o wizard
-  Cria todas as paginas customizadas aqui
+  Validacao da primeira fonte - usada pelo wizard e pelo silencioso.
+  Tudo vazio = vincular depois. Retorna '' se ok.
+  -------------------------------------------------------------------------- }
+function ErroFonte: String;
+var
+  Estacao, Fonte, Pasta: String;
+begin
+  Result := '';
+  Estacao := UpperCase(Trim(PageFonte.Values[0]));
+  Fonte   := UpperCase(Trim(PageFonte.Values[1]));
+  Pasta   := Trim(PageFonte.Values[2]);
+
+  if (Estacao = '') and (Fonte = '') then
+    Exit;    { vincular depois, pela tela FONTES DESTE PC }
+
+  if not CodigoValido(Estacao) then
+    Result := 'Codigo da estacao invalido: "' + Estacao + '".' + #13#10 +
+              'Use o codigo exatamente como cadastrado no servidor (ex: CAIAPO-M13-FT).'
+  else if not CodigoValido(Fonte) then
+    Result := 'Codigo da fonte invalido: "' + Fonte + '" (ex: FT, OCV, AOI).'
+  else if Pasta = '' then
+    Result := 'Informe a pasta onde o equipamento grava os logs desta fonte.';
+end;
+
+
+{ --------------------------------------------------------------------------
+  InitializeWizard: executado uma vez ao abrir o wizard (tambem no /SILENT)
   -------------------------------------------------------------------------- }
 procedure InitializeWizard;
+var
+  ParamDom: String;
 begin
-  { --- PAGINA 1: Configuracao da Estacao --- }
-  PageEstacao := CreateInputQueryPage(
+  { --- PAGINA 1: Dominio --- }
+  PageDominio := CreateInputOptionPage(
     wpWelcome,
-    'Configuração da Estação',
-    'Informe os dados da estação de teste',
-    'Preencha os campos abaixo. Estas informações serão gravadas no arquivo config.yaml.'
-  );
+    'Domínio da estação',
+    'Em qual banco esta estação grava',
+    'Non-Alpha e Alpha são bancos separados: uma estação pertence a um domínio só, ' +
+    'e a senha de um não abre o outro.',
+    True, False);
+  PageDominio.Add('Non-Alpha  (banco mes_nonalpha)');
+  PageDominio.Add('Alpha  (banco mes_alpha)');
 
-  PageEstacao.Add('Tipo da estação / prefixo do ID (PCM, FUNC ou TABC):', False);
-  PageEstacao.Add('Modelo do produto (ex: A06, A17, A16, A08):', False);
-  PageEstacao.Add('ID da máquina (ex: BR-PCMTEST-01, CAIAPO-M13):', False);
-  PageEstacao.Add('Tipo do testador (AUTO, PCM_TESTER, CYG ou P2500S):', False);
+  ParamDom := UpperCase(Trim(Param('DOMINIO', 'NONALPHA')));
+  StringChangeEx(ParamDom, '-', '', True);
+  DominioInvalido := (ParamDom <> 'NONALPHA') and (ParamDom <> 'ALPHA');
+  if ParamDom = 'ALPHA' then
+    PageDominio.SelectedValueIndex := 1
+  else
+    PageDominio.SelectedValueIndex := 0;
 
-  PageEstacao.Values[0] := UpperCase(Param('PREFIX',  'PCM'));
-  PageEstacao.Values[1] := UpperCase(Param('MODEL',   'A17'));
-  PageEstacao.Values[2] := UpperCase(Param('MACHINE', 'BR-PCMTEST-01'));
-  PageEstacao.Values[3] := UpperCase(Param('TESTER',  'AUTO'));
-
-  { --- PAGINA 2: Linha e CSV --- }
-  PageConfig := CreateInputQueryPage(
-    PageEstacao.ID,
-    'Configuração de Arquivos',
-    'Linha de produção e pasta dos CSVs',
-    'Informe a linha de produção e a pasta onde o testador salva os arquivos CSV desta estação.'
-  );
-
-  PageConfig.Add('Linha de produção (ex: NAVAJO, TOMAHAWK, CAIAPO):', False);
-  PageConfig.Add('Pasta dos CSVs do testador:', False);
-
-  CsvSugerido := SugerirCsv(PageEstacao.Values[0], PageEstacao.Values[1]);
-  PageConfig.Values[0] := UpperCase(Param('LINE', 'NAVAJO'));
-  PageConfig.Values[1] := Param('CSV', CsvSugerido);
-
-  { --- PAGINA 3: Banco de Dados --- }
+  { --- PAGINA 2: Banco de Dados --- }
   PageBanco := CreateInputQueryPage(
-    PageConfig.ID,
-    'Configuração do Banco de Dados',
-    'Conexão com o PostgreSQL do servidor Salcomp',
-    'Em produção, mantenha os valores padrão. Altere somente se o servidor mudou.'
-  );
+    PageDominio.ID,
+    'Conexão com o banco de dados',
+    'PostgreSQL do servidor Salcomp',
+    'Em produção, mantenha os valores padrão. Altere somente se o servidor mudou ' +
+    'ou para homologação.');
 
   PageBanco.Add('Host do servidor (IP ou nome):', False);
   PageBanco.Add('Porta PostgreSQL:', False);
   PageBanco.Add('Nome do banco:', False);
-  PageBanco.Add('Usuário do banco:', False);
+  PageBanco.Add('Usuário do banco (role das estações):', False);
 
-  { Host tem padrao porque so existe um servidor de producao (172.21.70.184).
-    Nao e' segredo — e' o endereco interno da rede da fabrica, ja documentado
-    em varios arquivos deste repositorio. A SENHA continua sem padrao aqui de
-    proposito: este .iss e' publico no GitHub, e gravar a senha real do banco
-    num arquivo que qualquer pessoa pode ler tornaria a credencial permanente
-    (mesmo apagada depois, continuaria recuperavel pelo historico do Git —
-    exatamente o problema que o commit 20e76ef corrigiu). O tecnico digita a
-    senha na instalacao (pagina seguinte) ou passa /DBPASS no modo silencioso,
-    nunca gravado em arquivo. }
+  { Host com padrao: so existe um servidor (172.21.70.184), endereco interno ja
+    documentado no repositorio. A SENHA nunca tem padrao: este .iss e' publico
+    no GitHub. O tecnico digita na instalacao ou passa /DBPASS no silencioso. }
+  NomeSugerido := 'mes_' + Dominio;
+  UserSugerido := 'mes_client_' + Dominio;
   PageBanco.Values[0] := Param('DBHOST', '172.21.70.184');
   PageBanco.Values[1] := Param('DBPORT', '5432');
-  PageBanco.Values[2] := Param('DBNAME', 'mes_db');
-  PageBanco.Values[3] := Param('DBUSER', 'mes_user');
+  PageBanco.Values[2] := Param('DBNAME', NomeSugerido);
+  PageBanco.Values[3] := Param('DBUSER', UserSugerido);
 
-  { --- PAGINA 4: Senha e tabela (separada da pagina 3, ver comentario na
-    declaracao de PageSenha acima) --- }
+  { --- PAGINA 3: Senha --- }
   PageSenha := CreateInputQueryPage(
     PageBanco.ID,
-    'Credenciais do Banco de Dados',
-    'Senha de acesso e tabela de resultados',
-    'A senha é gravada apenas no arquivo .env da estação, nunca no config.yaml.'
-  );
-
+    'Senha do banco de dados',
+    'Senha do role das estações deste domínio',
+    'A senha é gravada apenas no arquivo .env desta estação, nunca no config.yaml. ' +
+    'Peça à engenharia; não anote em papel nem em arquivo.');
   PageSenha.Add('Senha do banco:', True);  { True = oculta a senha }
-  PageSenha.Add('Tabela de resultados:', False);
-
   PageSenha.Values[0] := Param('DBPASS', '');
-  PageSenha.Values[1] := Param('TABLE',  'mes_results');
 
-  { --- PAGINA 5: Copia para a rede --- }
-  PageSync := CreateInputQueryPage(
+  { --- PAGINA 4: Primeira fonte (opcional) --- }
+  PageFonte := CreateInputQueryPage(
     PageSenha.ID,
-    'Cópia dos CSVs para a rede',
-    'Compartilhamento de destino (opcional)',
-    'Se esta estação também deve copiar os CSVs para um compartilhamento de rede, informe a pasta UNC. Deixe vazio para não copiar.'
-  );
-
-  PageSync.Add('Pasta de destino (ex: \\servidor\share\logs\A17). Vazio = não copiar:', False);
-
-  SyncSugerido := SugerirSync(PageEstacao.Values[0], PageEstacao.Values[1], PageBanco.Values[0]);
-  PageSync.Values[0] := Param('SYNC', SyncSugerido);
+    'Fonte de log deste PC (opcional)',
+    'Qual log do equipamento este PC envia ao banco',
+    'Use os códigos cadastrados no servidor de gerenciamento. Deixe estação e fonte ' +
+    'vazias para vincular depois pela tela FONTES DESTE PC (abre sozinha no primeiro start). ' +
+    'O vínculo é confirmado pelo servidor quando o cliente abre.');
+  PageFonte.Add('Código da estação (ex: CAIAPO-M13-FT):', False);
+  PageFonte.Add('Fonte (ex: FT, OCV, AOI):', False);
+  PageFonte.Add('Pasta onde o equipamento grava os logs (ex: D:\battData):', False);
+  PageFonte.Add('Cópia dos arquivos para a rede (UNC, opcional; vazio = não copiar):', False);
+  PageFonte.Values[0] := UpperCase(Param('STATION', ''));
+  PageFonte.Values[1] := UpperCase(Param('FONTE', ''));
+  PageFonte.Values[2] := Param('PASTA', '');
+  PageFonte.Values[3] := Param('SYNC', '');
 end;
 
 
 { --------------------------------------------------------------------------
   NextButtonClick: validacao ao clicar em Avancar em cada pagina
-  Retorna False para impedir avancar se algum campo estiver invalido
   -------------------------------------------------------------------------- }
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
-  Prefixo, Modelo, MaquinaID, Tester, Novo: String;
+  Erro: String;
 begin
   Result := True;
 
-  if CurPageID = PageEstacao.ID then begin
-    Prefixo   := UpperCase(Trim(PageEstacao.Values[0]));
-    Modelo    := UpperCase(Trim(PageEstacao.Values[1]));
-    MaquinaID := UpperCase(Trim(PageEstacao.Values[2]));
-    Tester    := UpperCase(Trim(PageEstacao.Values[3]));
-
-    if (Prefixo <> 'PCM') and (Prefixo <> 'FUNC') and (Prefixo <> 'TABC') then begin
-      MsgBox('Tipo da estação deve ser PCM, FUNC ou TABC.', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-
-    if Modelo = '' then begin
-      MsgBox('Por favor, informe o modelo do produto (ex: A06, A17, A08).', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-
-    if MaquinaID = '' then begin
-      MsgBox('Por favor, informe o ID da máquina (ex: BR-PCMTEST-01).', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-
-    if (Tester <> 'AUTO') and (Tester <> 'PCM_TESTER') and (Tester <> 'CYG') and (Tester <> 'P2500S') then begin
-      MsgBox('Tipo do testador deve ser AUTO, PCM_TESTER, CYG ou P2500S.' + #13#10 +
-             'AUTO detecta o formato pelo próprio arquivo e serve para todos.', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-
-    { Grava normalizado }
-    PageEstacao.Values[0] := Prefixo;
-    PageEstacao.Values[1] := Modelo;
-    PageEstacao.Values[2] := MaquinaID;
-    PageEstacao.Values[3] := Tester;
-
-    { Recalcula a pasta CSV sugerida - so se o tecnico nao alterou a sugestao anterior }
-    Novo := SugerirCsv(Prefixo, Modelo);
-    if (Trim(PageConfig.Values[1]) = '') or (PageConfig.Values[1] = CsvSugerido) then
-      PageConfig.Values[1] := Novo;
-    CsvSugerido := Novo;
+  if CurPageID = PageDominio.ID then begin
+    { Recalcula banco e usuario - so se o tecnico nao alterou a sugestao }
+    if (Trim(PageBanco.Values[2]) = '') or (PageBanco.Values[2] = NomeSugerido) then
+      PageBanco.Values[2] := 'mes_' + Dominio;
+    if (Trim(PageBanco.Values[3]) = '') or (PageBanco.Values[3] = UserSugerido) then
+      PageBanco.Values[3] := 'mes_client_' + Dominio;
+    NomeSugerido := 'mes_' + Dominio;
+    UserSugerido := 'mes_client_' + Dominio;
   end;
 
-  if CurPageID = PageConfig.ID then begin
-    if Trim(PageConfig.Values[0]) = '' then begin
-      MsgBox('Por favor, informe a linha de produção.', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-    if Trim(PageConfig.Values[1]) = '' then begin
-      MsgBox('Por favor, informe a pasta dos CSVs do testador.', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-    PageConfig.Values[0] := UpperCase(Trim(PageConfig.Values[0]));
-  end;
-
-  { Host tem padrao (172.21.70.184) mas ainda assim confere: se o tecnico
-    apagou o campo para digitar outro servidor e deixou vazio por engano, a
-    estacao ficaria sem conseguir conectar, com erro so' aparecendo no log. }
   if CurPageID = PageBanco.ID then begin
-    if Trim(PageBanco.Values[0]) = '' then begin
-      MsgBox('Informe o host do servidor PostgreSQL.' + #13#10 +
-             'Peca o endereco a engenharia se nao souber.', mbError, MB_OK);
+    if (Trim(PageBanco.Values[0]) = '') or (Trim(PageBanco.Values[1]) = '') or
+       (Trim(PageBanco.Values[2]) = '') or (Trim(PageBanco.Values[3]) = '') then begin
+      MsgBox('Preencha host, porta, banco e usuário.' + #13#10 +
+             'Peça os dados à engenharia se não souber.', mbError, MB_OK);
       Result := False;
       Exit;
     end;
-
-    { Sugere o share so agora, que o host do banco e' conhecido }
-    Novo := SugerirSync(PageEstacao.Values[0], PageEstacao.Values[1], Trim(PageBanco.Values[0]));
-    if (Trim(PageSync.Values[0]) = '') or (PageSync.Values[0] = SyncSugerido) then
-      PageSync.Values[0] := Novo;
-    SyncSugerido := Novo;
+    if StrToIntDef(Trim(PageBanco.Values[1]), 0) <= 0 then begin
+      MsgBox('Porta inválida: ' + PageBanco.Values[1], mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
   end;
 
   if CurPageID = PageSenha.ID then begin
     if Trim(PageSenha.Values[0]) = '' then begin
       MsgBox('Informe a senha do banco.' + #13#10 +
-             'Ela sera gravada no arquivo .env da estacao, nunca no config.yaml.',
+             'Ela será gravada no arquivo .env da estação, nunca no config.yaml.',
              mbError, MB_OK);
       Result := False;
       Exit;
     end;
-
-    if Trim(PageSenha.Values[1]) = '' then
-      PageSenha.Values[1] := 'mes_results';
   end;
+
+  if CurPageID = PageFonte.ID then begin
+    PageFonte.Values[0] := UpperCase(Trim(PageFonte.Values[0]));
+    PageFonte.Values[1] := UpperCase(Trim(PageFonte.Values[1]));
+    Erro := ErroFonte;
+    if Erro <> '' then begin
+      MsgBox(Erro, mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+  end;
+end;
+
+
+{ --------------------------------------------------------------------------
+  PararCliente: numa atualizacao o cliente esta' aberto na bandeja e o exe
+  fica travado. Primeiro encerra a tarefa agendada (senao o RestartOnFailure
+  dela reabre o cliente em 1 minuto), depois o processo.
+  -------------------------------------------------------------------------- }
+procedure PararCliente;
+var
+  ResultCode: Integer;
+begin
+  Exec('schtasks.exe', '/End /TN "{#TaskName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/F /IM {#ExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 
@@ -399,36 +427,25 @@ end;
   aqui. Retornar texto nao vazio cancela a instalacao mostrando a mensagem.
   -------------------------------------------------------------------------- }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
-var
-  Prefixo, Tester: String;
 begin
   Result := '';
-  if not WizardSilent then
-    Exit;
+  if WizardSilent then begin
+    PageFonte.Values[0] := UpperCase(Trim(PageFonte.Values[0]));
+    PageFonte.Values[1] := UpperCase(Trim(PageFonte.Values[1]));
+    if DominioInvalido then
+      Result := 'Modo silencioso: /DOMINIO deve ser NONALPHA ou ALPHA.'
+    else if Trim(PageSenha.Values[0]) = '' then
+      Result := 'Modo silencioso: informe /DBPASS=<senha do banco>.'
+    else if StrToIntDef(Trim(PageBanco.Values[1]), 0) <= 0 then
+      Result := 'Modo silencioso: /DBPORT invalido.'
+    else
+      Result := ErroFonte;
+    if Result <> '' then
+      Exit;
+  end;
 
-  Prefixo := UpperCase(Trim(PageEstacao.Values[0]));
-  Tester  := UpperCase(Trim(PageEstacao.Values[3]));
 
-  if Trim(PageSenha.Values[0]) = '' then
-    Result := 'Modo silencioso: informe /DBPASS=<senha do banco>.'
-  else if (Prefixo <> 'PCM') and (Prefixo <> 'FUNC') and (Prefixo <> 'TABC') then
-    Result := 'Modo silencioso: /PREFIX deve ser PCM, FUNC ou TABC.'
-  else if (Tester <> 'AUTO') and (Tester <> 'PCM_TESTER') and (Tester <> 'CYG') and (Tester <> 'P2500S') then
-    Result := 'Modo silencioso: /TESTER deve ser AUTO, PCM_TESTER, CYG ou P2500S.'
-  else if Trim(PageConfig.Values[1]) = '' then
-    Result := 'Modo silencioso: informe /CSV=<pasta dos CSVs>.';
-end;
-
-
-{ --------------------------------------------------------------------------
-  BuildStationId: monta o ID da estacao no padrao PREFIXO_MODELO_MAQUINA
-  Ex.: PCM_A17_BR-PCMTEST-01, FUNC_A08_CAIAPO-M13, TABC_A08_CAIAPO-M13
-  -------------------------------------------------------------------------- }
-function BuildStationId: String;
-begin
-  Result := UpperCase(Trim(PageEstacao.Values[0]))
-          + '_' + UpperCase(Trim(PageEstacao.Values[1]))
-          + '_' + UpperCase(Trim(PageEstacao.Values[2]));
+  PararCliente;
 end;
 
 
@@ -438,118 +455,115 @@ begin
 end;
 
 
+{ True se o config.yaml existente ja' e' do formato 2.0 (cadastro central).
+  O da v1.0.5 tem "station:" e nao tem "vinculos:"/"cliente:". }
+function ConfigEh20(Caminho: String): Boolean;
+var
+  S: AnsiString;
+begin
+  Result := False;
+  if LoadStringFromFile(Caminho, S) then
+    Result := (Pos('vinculos:', S) > 0) or (Pos('cliente:', S) > 0);
+end;
+
+
+{ Guarda um arquivo da v1.0.5 como <nome>.v105.bak (substitui bak anterior) }
+procedure GuardarV105(Nome: String);
+var
+  Origem, Destino: String;
+begin
+  Origem  := ExpandConstant('{app}\' + Nome);
+  Destino := Origem + '.v105.bak';
+  if not FileExists(Origem) then
+    Exit;
+  DeleteFile(Destino);
+  if RenameFile(Origem, Destino) then
+    Log('v1.0.5: ' + Nome + ' -> ' + Nome + '.v105.bak')
+  else
+    Log('v1.0.5: nao consegui renomear ' + Nome);
+end;
+
+
 { --------------------------------------------------------------------------
   GenerateConfig: grava o .env e o config.yaml na pasta de instalacao
 
-  Duas regras importantes para producao:
-
-  1. A SENHA DO BANCO vai para o .env, nunca para o config.yaml. O config
-     guarda apenas o placeholder da variavel MES_DB_PASSWORD, que o
-     config/loader.py resolve na hora de conectar.
-     ATENCAO: nao escreva a sintaxe completa do placeholder aqui dentro -
-     a chave de fechamento encerraria este comentario Pascal antes da hora.
-
-  2. ATUALIZACAO PRESERVA O CONFIG DA ESTACAO. Se ja' existe um config.yaml,
-     ele nao e' sobrescrito - a estacao ja' foi configurada, possivelmente
-     ajustada a mao depois da instalacao, e reinstalar por cima para atualizar
-     a versao nao pode zerar isso. O .env e' sempre reescrito, porque a senha
-     vem do formulario e pode ter mudado.
-
-  Derivados do tipo do testador:
-     - log.recursive: true so para PCM_TESTER (TestPad grava em subpastas por
-       modelo). P2500S e CYG gravam tudo numa pasta so.
-     - spec_check.enabled: true so para PCM_TESTER. O P2500S traz Max/Min em
-       cada linha e o spec_limits.csv nao cobre esses modelos.
+  1. A SENHA vai para o .env, nunca para o config.yaml. O config guarda so' o
+     placeholder da variavel MES_DB_PASSWORD, que o config/loader.py resolve.
+     ATENCAO: nao escreva a sintaxe completa do placeholder dentro de um
+     comentario Pascal - a chave de fechamento encerraria o comentario.
+  2. Um config.yaml 2.0 existente e' PRESERVADO (vinculos feitos na tela
+     FONTES DESTE PC, ajustes a mao). O .env e' sempre reescrito.
+  3. Um config.yaml da v1.0.5 e' guardado como .v105.bak, junto com a fila
+     offline e os offsets (formato e banco antigos), e um config 2.0 e' gerado.
   -------------------------------------------------------------------------- }
 procedure GenerateConfig;
 var
-  StationId:   String;
-  Model:       String;
-  Tester:      String;
-  Line:        String;
-  CsvFolder:   String;
-  DbHost:      String;
-  DbPort:      String;
-  DbName:      String;
-  DbUser:      String;
-  DbPass:      String;
-  DbTable:     String;
-  SyncDest:    String;
-  SyncOn:      Boolean;
-  OpMode:      String;
-  IsPcm:       Boolean;
-  ConfigPath:  String;
-  EnvPath:     String;
-  Content:     String;
+  ConfigPath, EnvPath, Content, Vinculos: String;
+  Estacao, Fonte, Pasta, SyncDest, OpMode: String;
 begin
-  StationId  := BuildStationId;
-  Model      := UpperCase(Trim(PageEstacao.Values[1]));
-  Tester     := UpperCase(Trim(PageEstacao.Values[3]));
-  Line       := UpperCase(Trim(PageConfig.Values[0]));
-  CsvFolder  := Trim(PageConfig.Values[1]);
-  DbHost     := Trim(PageBanco.Values[0]);
-  DbPort     := Trim(PageBanco.Values[1]);
-  DbName     := Trim(PageBanco.Values[2]);
-  DbUser     := Trim(PageBanco.Values[3]);
-  DbPass     := Trim(PageSenha.Values[0]);
-  DbTable    := Trim(PageSenha.Values[1]);
-  SyncDest   := Trim(PageSync.Values[0]);
-  SyncOn     := SyncDest <> '';
-  IsPcm      := Tester = 'PCM_TESTER';
-  { Sem pasta de rede o modo e' "database": com "both" o monitor liga o sync
-    e, ate a correcao em file_monitor.py, acusava "Pasta destino vazia" a
-    cada ciclo, deixando a bandeja em erro. }
-  if SyncOn then OpMode := 'both' else OpMode := 'database';
   ConfigPath := ExpandConstant('{app}\config.yaml');
   EnvPath    := ExpandConstant('{app}\.env');
 
-  if Tester = '' then Tester := 'AUTO';
-  if DbTable = '' then DbTable := 'mes_results';
-
   { --- .env: sempre reescrito, e' onde a senha do banco mora --- }
-  SaveStringToFile(EnvPath, 'MES_DB_PASSWORD=' + DbPass + #13#10, False);
+  SaveStringToFile(EnvPath, 'MES_DB_PASSWORD=' + Trim(PageSenha.Values[0]) + #13#10, False);
 
-  { --- config.yaml: preservado se a estacao ja' esta' configurada --- }
-  if FileExists(ConfigPath) then
-    Exit;
+  if FileExists(ConfigPath) then begin
+    if ConfigEh20(ConfigPath) then
+      Exit;     { estacao 2.0 ja' configurada: preserva }
+    GuardarV105('config.yaml');
+    GuardarV105('offline_queue.jsonl');
+    GuardarV105('offsets.json');
+  end;
 
-  { Substitui barras invertidas por barras normais para o YAML }
-  StringChangeEx(CsvFolder, '\', '/', False);
+  Estacao  := UpperCase(Trim(PageFonte.Values[0]));
+  Fonte    := UpperCase(Trim(PageFonte.Values[1]));
+  Pasta    := Trim(PageFonte.Values[2]);
+  SyncDest := Trim(PageFonte.Values[3]);
+
+  if Estacao = '' then begin
+    Vinculos := 'vinculos: []                   # vazio: o cliente abre a tela FONTES DESTE PC' + #13#10;
+    SyncDest := '';
+  end else
+    Vinculos :=
+      'vinculos:'                                            + #13#10 +
+      '  - estacao: ' + Estacao                              + #13#10 +
+      '    fonte: '   + Fonte                                + #13#10 +
+      '    pasta: '   + YamlStr(Pasta)                       + #13#10 +
+      '    sync_destino: ' + YamlStr(SyncDest)               + #13#10;
+
+  { Sem copia para a rede o modo e' "database"; com copia, "both" }
+  if SyncDest <> '' then OpMode := 'both' else OpMode := 'database';
 
   Content :=
+    '# config.yaml - Proteus Client {#AppVersion} (gerado pelo instalador)'  + #13#10 +
+    '# Dominio: ' + DominioRotulo + '. Senha no arquivo .env (nunca aqui).'   + #13#10 +
+    '# Fontes deste PC: tela FONTES DESTE PC (senha de engenharia).'          + #13#10 +
+    ''                                                       + #13#10 +
     'database:'                                              + #13#10 +
     '  enabled: true'                                        + #13#10 +
-    '  host: '     + DbHost                                  + #13#10 +
-    '  port: '     + DbPort                                  + #13#10 +
-    '  name: '     + DbName                                  + #13#10 +
-    '  user: '     + DbUser                                  + #13#10 +
+    '  host: '     + Trim(PageBanco.Values[0])               + #13#10 +
+    '  port: '     + Trim(PageBanco.Values[1])               + #13#10 +
+    '  name: '     + Trim(PageBanco.Values[2])               + #13#10 +
+    '  user: '     + Trim(PageBanco.Values[3])               + #13#10 +
     '  password: ${MES_DB_PASSWORD}'                         + #13#10 +
-    '  table: '    + DbTable                                 + #13#10 +
-    '  jsonb_index: false'                                   + #13#10 +
     ''                                                       + #13#10 +
-    'station:'                                               + #13#10 +
-    '  id: '       + StationId                               + #13#10 +
-    '  type: '     + Tester                                  + #13#10 +
-    '  model: '    + Model                                   + #13#10 +
-    '  line: '     + Line                                    + #13#10 +
+    'cliente:'                                               + #13#10 +
+    '  host_id: ""                    # vazio = nome do PC'  + #13#10 +
     ''                                                       + #13#10 +
-    'log:'                                                   + #13#10 +
-    '  folder: '   + CsvFolder                               + #13#10 +
-    '  recursive: ' + BoolStr(IsPcm)                         + #13#10 +
+    Vinculos                                                 +
     ''                                                       + #13#10 +
     'operation:'                                             + #13#10 +
-    '  mode: '    + OpMode                                   + #13#10 +
+    '  mode: ' + OpMode                                      + #13#10 +
     ''                                                       + #13#10 +
     'sync:'                                                  + #13#10 +
-    '  enabled: ' + BoolStr(SyncOn)                          + #13#10 +
-    '  destination_folder: "' + SyncDest + '"'               + #13#10 +
+    '  destination_folder: ""'                               + #13#10 +
     '  mode: diff'                                           + #13#10 +
     ''                                                       + #13#10 +
     'parser:'                                                + #13#10 +
     '  scan_interval: 5'                                     + #13#10 +
     ''                                                       + #13#10 +
     'spec_check:'                                            + #13#10 +
-    '  enabled: ' + BoolStr(IsPcm)                           + #13#10 +
+    '  enabled: false'                                       + #13#10 +
     '  file: spec_limits.csv'                                + #13#10 +
     ''                                                       + #13#10 +
     'auth:'                                                  + #13#10 +
@@ -561,8 +575,7 @@ end;
 
 
 { --------------------------------------------------------------------------
-  RegisterTaskScheduler: cria tarefa de auto-start via schtasks.exe
-  Usa linha de comando porque o Pascal nao tem acesso direto ao COM do Windows
+  RegisterTaskScheduler: cria tarefa de auto-start via schtasks.exe (XML)
   -------------------------------------------------------------------------- }
 procedure RegisterTaskScheduler;
 var
@@ -574,7 +587,6 @@ begin
   ExePath := ExpandConstant('{app}\{#ExeName}');
   XmlPath := ExpandConstant('{tmp}\mes_task.xml');
 
-  { Gera XML da tarefa agendada — mais confiavel que parametros do schtasks }
   TaskXml :=
     '<?xml version="1.0" encoding="UTF-16"?>'                                   + #13#10 +
     '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">' + #13#10 +
@@ -611,94 +623,94 @@ begin
 
   SaveStringToFile(XmlPath, TaskXml, False);
 
-  { Importa a tarefa via schtasks /Create }
   Exec('schtasks.exe',
-       '/Create /TN "MES_Client_Autostart" /XML "' + XmlPath + '" /F',
+       '/Create /TN "{#TaskName}" /XML "' + XmlPath + '" /F',
        '',
        SW_HIDE,
        ewWaitUntilTerminated,
        ResultCode);
+
+  { Sem a tarefa o cliente nao volta sozinho apos reiniciar - avisa em vez de
+    terminar a instalacao como se estivesse tudo certo }
+  Log('schtasks /Create terminou com codigo ' + IntToStr(ResultCode));
+  if ResultCode <> 0 then
+    SuppressibleMsgBox('Nao foi possivel criar a tarefa de inicio automatico ' +
+      '(schtasks codigo ' + IntToStr(ResultCode) + ').' + #13#10 +
+      'O Proteus Client foi instalado, mas nao vai abrir sozinho apos reiniciar. ' +
+      'Avise a engenharia.', mbError, MB_OK, IDOK);
 end;
 
 
 { --------------------------------------------------------------------------
-  CurStepChanged: gancho chamado em cada transicao de passo da instalacao
-  ssPostInstall = apos copiar todos os arquivos
+  CurStepChanged: ssPostInstall = apos copiar todos os arquivos
   -------------------------------------------------------------------------- }
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
-    { Cria subpastas necessarias para o runtime }
     ForceDirectories(ExpandConstant('{app}\logs'));
     ForceDirectories(ExpandConstant('{app}\state'));
     ForceDirectories(ExpandConstant('{app}\data'));
-
-    { Gera o config.yaml personalizado para esta estacao }
     GenerateConfig;
-
-    { Registra a tarefa de auto-start no Windows Task Scheduler }
     RegisterTaskScheduler;
   end;
 end;
 
 
 { --------------------------------------------------------------------------
-  CurUninstallStepChanged: gancho durante desinstalacao
-  usUninstall = logo antes de remover os arquivos
+  CurUninstallStepChanged: usUninstall = logo antes de remover os arquivos
   -------------------------------------------------------------------------- }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ResultCode: Integer;
 begin
   if CurUninstallStep = usUninstall then begin
-    { Para o processo MES Client se estiver rodando }
+    Exec('schtasks.exe', '/End /TN "{#TaskName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec('taskkill.exe', '/F /IM {#ExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-
-    { Remove a tarefa do Task Scheduler }
-    Exec('schtasks.exe', '/Delete /TN "MES_Client_Autostart" /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('schtasks.exe', '/Delete /TN "{#TaskName}" /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;
 
 
 { --------------------------------------------------------------------------
-  UpdateReadyMemo: texto exibido na pagina "Pronto para instalar"
-  Mostra um resumo do que sera feito
+  UpdateReadyMemo: texto da pagina "Pronto para instalar"
   -------------------------------------------------------------------------- }
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
   MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
 var
-  StationId:  String;
-  ConfigAcao: String;
-  SyncTxt:    String;
+  ConfigPath, ConfigAcao, FonteTxt, SyncTxt: String;
 begin
-  StationId := BuildStationId;
-
-  { Avisa o tecnico se esta e' uma atualizacao sobre estacao ja' configurada }
-  if FileExists(ExpandConstant('{app}\config.yaml')) then
-    ConfigAcao := 'Preservar o config.yaml existente desta estação (campos acima serão ignorados)'
+  ConfigPath := ExpandConstant('{app}\config.yaml');
+  if not FileExists(ConfigPath) then
+    ConfigAcao := 'Gerar config.yaml 2.0 para esta estação'
+  else if ConfigEh20(ConfigPath) then
+    ConfigAcao := 'Preservar o config.yaml 2.0 existente (fonte acima ignorada; banco e senha: só o .env muda)'
   else
-    ConfigAcao := 'Gerar config.yaml para esta estação';
+    ConfigAcao := 'Atualizar da v1.0.5: guardar config.yaml, fila e offsets como *.v105.bak e gerar config 2.0';
 
-  if Trim(PageSync.Values[0]) = '' then
+  if Trim(PageFonte.Values[0]) = '' then
+    FonteTxt := '(vincular depois, na tela FONTES DESTE PC)'
+  else
+    FonteTxt := UpperCase(Trim(PageFonte.Values[0])) + ' / ' + UpperCase(Trim(PageFonte.Values[1])) +
+                '  <-  ' + Trim(PageFonte.Values[2]);
+
+  if Trim(PageFonte.Values[3]) = '' then
     SyncTxt := '(desligada)'
   else
-    SyncTxt := Trim(PageSync.Values[0]);
+    SyncTxt := Trim(PageFonte.Values[3]);
 
   Result :=
-    'Estação configurada:' + NewLine +
-    Space + 'Station ID  : ' + StationId                                    + NewLine +
-    Space + 'Modelo      : ' + UpperCase(Trim(PageEstacao.Values[1]))       + NewLine +
-    Space + 'Máquina     : ' + UpperCase(Trim(PageEstacao.Values[2]))       + NewLine +
-    Space + 'Testador    : ' + UpperCase(Trim(PageEstacao.Values[3]))       + NewLine +
-    Space + 'Linha       : ' + UpperCase(Trim(PageConfig.Values[0]))        + NewLine +
-    Space + 'Pasta CSV   : ' + Trim(PageConfig.Values[1])                   + NewLine +
-    Space + 'Banco       : ' + Trim(PageBanco.Values[0]) + ':' + Trim(PageBanco.Values[1]) + '/' + Trim(PageBanco.Values[2]) + '  tabela ' + Trim(PageSenha.Values[1]) + NewLine +
-    Space + 'Cópia rede  : ' + SyncTxt                                      + NewLine +
+    'Estação:' + NewLine +
+    Space + 'Domínio     : ' + DominioRotulo                                      + NewLine +
+    Space + 'Banco       : ' + Trim(PageBanco.Values[0]) + ':' + Trim(PageBanco.Values[1]) +
+                               '/' + Trim(PageBanco.Values[2]) + '  (usuário ' + Trim(PageBanco.Values[3]) + ')' + NewLine +
+    Space + 'Fonte       : ' + FonteTxt                                           + NewLine +
+    Space + 'Cópia rede  : ' + SyncTxt                                            + NewLine +
     NewLine +
     'Ações que serão executadas:' + NewLine +
-    Space + 'Copiar MES_Client.exe para C:\Utility\MES'                     + NewLine +
-    Space + ConfigAcao                                                      + NewLine +
-    Space + 'Gravar a senha do banco no arquivo .env'                       + NewLine +
-    Space + 'Registrar inicialização automática (Task Scheduler)'           + NewLine +
-    Space + 'Criar atalho na Área de Trabalho';
+    Space + 'Encerrar o cliente, se estiver aberto'                               + NewLine +
+    Space + 'Copiar {#ExeName} para {#InstallDir}'                                + NewLine +
+    Space + ConfigAcao                                                            + NewLine +
+    Space + 'Gravar a senha do banco no arquivo .env'                             + NewLine +
+    Space + 'Registrar inicialização automática (Task Scheduler)'                 + NewLine +
+    Space + 'Criar atalho "{#AppName}" na Área de Trabalho';
 end;

@@ -103,7 +103,8 @@ def teste_source_key():
     # Cliente 2.0: o lote é montado em parser/registry.py; a chave vem de
     # file_monitor._source_key (relpath com '/')
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    codigo = open(os.path.join(raiz, "parser", "registry.py"), encoding="utf-8").read()
+    pacote = "csvparser" if os.path.isdir(os.path.join(raiz, "csvparser")) else "parser"  # edição Win7
+    codigo = open(os.path.join(raiz, pacote, "registry.py"), encoding="utf-8").read()
     checar('"source_file": source_key,' in codigo,
            "registry grava source_key no lote (nao file_name)")
     from monitor.file_monitor import _source_key
