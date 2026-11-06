@@ -41,8 +41,8 @@ CREATE TABLE mes_test_results (
     version_name    TEXT,
     serial_number   TEXT,          -- extraído (pode ser NULL se coluna desconhecida)
     result_status   TEXT,          -- PASS / FAIL / NULL
-    test_start_time TEXT,
-    test_stop_time  TEXT,
+    test_start_time TIMESTAMP,     -- convertido de texto pelo equipamento (ver _parse_test_time)
+    test_stop_time  TIMESTAMP,
     source_file     TEXT,
     source_line_no  INTEGER,
     schema_hash     TEXT,          -- identifica a estrutura do CSV

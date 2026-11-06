@@ -48,6 +48,7 @@ from monitor.file_monitor import start_monitor
 from state.app_context import runtime_status
 from state.runtime_status import CLIENT_VERSION
 from system.single_instance import SingleInstance
+from system.ui_fontes import FontesWindow
 from logs.logger_setup import get_logger
 
 logger = get_logger()
@@ -136,6 +137,9 @@ class MESClientUI:
         self.limites_window    = None
         self.mapeamento_window = None
         self.ajuda_window      = None
+        self.fontes_window     = None
+        self._fontes           = FontesWindow(self)
+        self._encerrar_monitor = threading.Event()
         self.active_window  = None   # janela modal atualmente ativa (só uma por vez)
         self.auth_dialog    = None   # diálogo de autenticação (_check_role); pausa o focus lock
 
@@ -588,6 +592,7 @@ class MESClientUI:
         add_sep()
         add_item("STATUS",       self.status_clicked,    symbol="◉")
         add_item("CONFIGURAÇÃO", self.config_clicked,    symbol="⚙")
+        add_item("FONTES DESTE PC", self.fontes_clicked, symbol="≡")
         add_item("LIMITES",      self.limites_clicked,   symbol="◈")
         add_item("MAPEAMENTO",   self.mapeamento_clicked,symbol="⇄")
         add_sep()
@@ -907,6 +912,15 @@ class MESClientUI:
                              "Parser rodando. Monitorando logs, banco e sincronização.")
         except Exception:
             pass
+        # Primeiro start (instalação nova): nenhuma fonte vinculada ainda →
+        # abre direto a tela FONTES DESTE PC em vez do STATUS
+        try:
+            sem_fontes = not (load_raw_config().get("vinculos") or [])
+        except Exception:
+            sem_fontes = False
+        if sem_fontes:
+            self.fontes_clicked()
+            return
         self.status_clicked()
         self.root.after(12000, self._auto_close_status)
 
@@ -926,32 +940,34 @@ class MESClientUI:
         if self.monitor_thread and self.monitor_thread.is_alive():
             return
 
+        self._encerrar_monitor = threading.Event()
         self.monitor_thread = threading.Thread(
             target=start_monitor,
             kwargs={
                 "stop_event": self.stop_event,
-                "status_callback": self.update_status_icon
+                "status_callback": self.update_status_icon,
+                "encerrar": self._encerrar_monitor,
             },
             daemon=True
         )
         self.monitor_thread.start()
 
     def _restart_monitor(self):
-        """Sinaliza parada e agenda reinício após 1s (dá tempo da thread parar)."""
-        self.stop_event.set()
-        # after(1000, func): agenda func para rodar em 1000ms na main thread
-        self.root.after(1000, self._do_restart_monitor)
+        """Encerra a thread atual do monitor e sobe outra com o config novo.
+        Até a v1.0.5 a thread antiga só pausava e voltava a rodar junto com a
+        nova (dois monitores lendo os mesmos arquivos)."""
+        self._encerrar_monitor.set()
+        self.root.after(500, self._do_restart_monitor)
 
     def _do_restart_monitor(self):
         """Reinicia o monitor com configuração atualizada do disco."""
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            # ainda terminando a rodada atual (gravação em andamento): espera
+            self.root.after(500, self._do_restart_monitor)
+            return
         self.stop_event.clear()
         self.config = load_config()   # relê config.yaml — pega o que foi salvo
-        self.monitor_thread = threading.Thread(
-            target=start_monitor,
-            kwargs={"stop_event": self.stop_event, "status_callback": self.update_status_icon},
-            daemon=True
-        )
-        self.monitor_thread.start()
+        self.ensure_monitor_running()
         runtime_status.set("client_status", "RUNNING")
         self.update_status_icon("green")
 
@@ -978,6 +994,9 @@ class MESClientUI:
             runtime_status.set("client_status", "STOPPED")
             self.update_status_icon("yellow")
         self.root.after(0, _do_stop)
+
+    def fontes_clicked(self, icon=None, item=None):
+        self.root.after(0, self._fontes.abrir)
 
     def status_clicked(self, icon=None, item=None):
         def _open():
@@ -1047,8 +1066,11 @@ class MESClientUI:
             fields = [
                 ("client_status", "Status do Client"),
                 ("db_status", "Status do Banco"),
-                ("station_name", "Station"),
+                ("station_name", "Estação(ões)"),
+                ("host_id", "PC (nome enviado ao banco)"),
+                ("fontes", "Fontes deste PC"),
                 ("client_version", "Versão do Client"),
+                ("schema_status", "Schema do banco"),
                 ("operation_mode", "Modo de Operação"),
 
                 ("sync_status", "Status Sync"),
@@ -1178,10 +1200,26 @@ class MESClientUI:
                 except Exception:
                     pass
 
+            cor = None
+            if key == "fontes":
+                fontes = value or {}
+                linhas = []
+                for k, f in sorted(fontes.items()):
+                    t = "%s  [%s]  %s" % (k, f.get("status", ""), f.get("pasta", ""))
+                    if f.get("detalhe"):
+                        t += "\n      " + f["detalhe"]
+                    if f.get("total_sessao"):
+                        t += "\n      total na sessão: %d • último: %s %s" % (
+                            f["total_sessao"], f.get("ultimo_arquivo") or "-", f.get("ultimo_insert") or "")
+                    linhas.append(t)
+                value = "\n".join(linhas) or "nenhuma — abra FONTES DESTE PC"
+                ruins = [f for f in fontes.values() if not str(f.get("status", "")).startswith("OK")]
+                cor = "#ff7b7b" if (ruins or not fontes) else "#7bd88f"
+
             if value is None or str(value).strip() == "":
                 value = "-"
 
-            lbl.config(text=str(value))
+            lbl.config(text=str(value), fg=cor or self.fg_secondary)
 
         self.status_window.after(1000, self._refresh_status_window)
 
@@ -1243,8 +1281,8 @@ class MESClientUI:
                     "Criado: 03-2026\n\n"
                     "By Parente\n"
                     "Engenharia de Testes Manaus\n\n"
-                    "Parser universal para logs CYG / PCM Tester / P2500S\n"
-                    "com detecção automática de modelo e schema"
+                    "Cadastro centralizado: estações e fontes de log\n"
+                    "P2500S / PCM Tester / CYG + formatos configuráveis"
                 ),
                 bg=self.bg_main,
                 fg=self.fg_secondary,
@@ -1391,26 +1429,25 @@ class MESClientUI:
 
                 return entry
 
-            source_entry = add_entry(0, "Pasta origem dos logs CSV", cfg["log"]["folder"], browse=True)
-            self._tooltip(source_entry, "Pasta monitorada onde o testador grava os arquivos CSV de resultado.\nEx: D:\\Data_Info\\A06")
+            # Cliente 2.0: pasta dos logs e estação saíram daqui — ficam na tela
+            # FONTES DESTE PC (escolhidas do cadastro do servidor, por fonte).
+            tk.Label(
+                form,
+                text="Estações, fontes e pastas dos logs: menu FONTES DESTE PC.",
+                bg=self.bg_main, fg="#7bd88f", font=("Segoe UI", 9, "bold"), anchor="w"
+            ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(6, 0), padx=(4, 0))
 
-            destination_entry = add_entry(2, "Pasta destino para sincronizar logs CSV", cfg.get("sync", {}).get("destination_folder", ""), browse=True)
-            self._tooltip(destination_entry, "Destino de rede para sincronização dos arquivos CSV.\nEx: E:\\servidor_salcomp")
+            destination_entry = add_entry(2, "Pasta destino para sincronizar logs (só com 1 fonte)", cfg.get("sync", {}).get("destination_folder", ""), browse=True)
+            self._tooltip(destination_entry, "Destino de rede para a cópia dos arquivos.\nVale só quando este PC tem UMA fonte;\ncom várias, cada fonte tem o seu destino (FONTES DESTE PC).")
 
             scan_entry = add_entry(4, "Intervalo de leitura (s)", cfg["parser"]["scan_interval"])
             self._tooltip(scan_entry, "Frequência com que o monitor verifica novos arquivos na pasta.\nValor em segundos (padrão: 5).")
 
-            station_entry = add_entry(6, "Station ID", cfg["station"]["id"])
-            self._tooltip(station_entry, "Identificador único desta estação de teste.\nUsado para rastreabilidade no banco de dados.")
-
             db_host_entry = add_entry(8, "DB Host", cfg["database"]["host"])
-            self._tooltip(db_host_entry, "Endereço IP ou hostname do servidor PostgreSQL.\nEx: localhost  ou  192.168.1.100")
+            self._tooltip(db_host_entry, "Endereço IP ou hostname do servidor PostgreSQL.\nEx: 172.21.70.184")
 
-            db_name_entry = add_entry(10, "DB Name", cfg["database"]["name"])
-            self._tooltip(db_name_entry, "Nome do banco de dados PostgreSQL.\nSerá criado automaticamente se não existir.")
-
-            db_table_entry = add_entry(12, "Tabela de resultados (INSERT)", cfg["database"].get("table", "mes_test_results"))
-            self._tooltip(db_table_entry, "Nome da tabela onde os resultados de teste serão inseridos.\nSomente letras, números e underscore.")
+            db_name_entry = add_entry(10, "DB Name (domínio)", cfg["database"]["name"])
+            self._tooltip(db_name_entry, "Banco do domínio: mes_nonalpha ou mes_alpha.\nO cliente NÃO cria banco nem tabela.")
 
             op_frame = tk.Frame(form, bg=self.bg_main)
             op_frame.grid(row=14, column=0, columnspan=2, sticky="w", pady=(12, 4), padx=4)
@@ -1513,13 +1550,10 @@ class MESClientUI:
             def save_clicked():
                 c = state["cfg"]
                 field_map = [
-                    ("Pasta origem dos logs", source_entry, str(c["log"]["folder"])),
                     ("Pasta destino sync", destination_entry, str(c.get("sync", {}).get("destination_folder", ""))),
                     ("Intervalo de leitura (s)", scan_entry, str(c["parser"]["scan_interval"])),
-                    ("Station ID", station_entry, str(c["station"]["id"])),
                     ("DB Host", db_host_entry, str(c["database"]["host"])),
                     ("DB Name", db_name_entry, str(c["database"]["name"])),
-                    ("Tabela de resultados", db_table_entry, str(c["database"].get("table", "mes_test_results"))),
                 ]
 
                 changed = [name for name, entry, orig in field_map if entry.get().strip() != orig.strip()]
@@ -1548,16 +1582,11 @@ class MESClientUI:
                 new_cfg.setdefault("operation", {})
                 new_cfg.setdefault("sync", {})
                 new_cfg.setdefault("database", {})
-                new_cfg.setdefault("log", {})
                 new_cfg.setdefault("parser", {})
-                new_cfg.setdefault("station", {})
 
-                new_cfg["log"]["folder"] = source_entry.get().strip()
                 new_cfg["parser"]["scan_interval"] = int(scan_entry.get().strip() or 5)
-                new_cfg["station"]["id"] = station_entry.get().strip()
                 new_cfg["database"]["host"] = db_host_entry.get().strip()
                 new_cfg["database"]["name"] = db_name_entry.get().strip()
-                new_cfg["database"]["table"] = db_table_entry.get().strip() or "mes_test_results"
                 new_cfg["operation"]["mode"] = operation_mode_var.get()
                 new_cfg["sync"]["destination_folder"] = destination_entry.get().strip()
                 new_cfg["sync"]["mode"] = sync_mode_var.get()

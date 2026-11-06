@@ -476,6 +476,7 @@ var
   DbTable:     String;
   SyncDest:    String;
   SyncOn:      Boolean;
+  OpMode:      String;
   IsPcm:       Boolean;
   ConfigPath:  String;
   EnvPath:     String;
@@ -495,6 +496,10 @@ begin
   SyncDest   := Trim(PageSync.Values[0]);
   SyncOn     := SyncDest <> '';
   IsPcm      := Tester = 'PCM_TESTER';
+  { Sem pasta de rede o modo e' "database": com "both" o monitor liga o sync
+    e, ate a correcao em file_monitor.py, acusava "Pasta destino vazia" a
+    cada ciclo, deixando a bandeja em erro. }
+  if SyncOn then OpMode := 'both' else OpMode := 'database';
   ConfigPath := ExpandConstant('{app}\config.yaml');
   EnvPath    := ExpandConstant('{app}\.env');
 
@@ -533,7 +538,7 @@ begin
     '  recursive: ' + BoolStr(IsPcm)                         + #13#10 +
     ''                                                       + #13#10 +
     'operation:'                                             + #13#10 +
-    '  mode: both'                                           + #13#10 +
+    '  mode: '    + OpMode                                   + #13#10 +
     ''                                                       + #13#10 +
     'sync:'                                                  + #13#10 +
     '  enabled: ' + BoolStr(SyncOn)                          + #13#10 +

@@ -100,11 +100,15 @@ def teste_source_key():
     checar("\\" not in k17, "sem barra invertida — mesma chave em Windows e Linux")
 
     # E o monitor precisa continuar chamando isso de dentro do loop
-    fm = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                      "monitor", "file_monitor.py")
-    codigo = open(fm, encoding="utf-8").read()
-    checar('"source_file":     source_key,' in codigo,
-           "file_monitor grava source_key no lote (nao file_name)")
+    # Cliente 2.0: o lote é montado em parser/registry.py; a chave vem de
+    # file_monitor._source_key (relpath com '/')
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    codigo = open(os.path.join(raiz, "parser", "registry.py"), encoding="utf-8").read()
+    checar('"source_file": source_key,' in codigo,
+           "registry grava source_key no lote (nao file_name)")
+    from monitor.file_monitor import _source_key
+    checar(_source_key(a17, log_folder) == "A17/2026-09-09.csv",
+           "file_monitor._source_key = caminho relativo com '/'")
 
 
 # -----------------------------------------------------------------------------

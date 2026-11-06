@@ -30,9 +30,9 @@ from config.loader import get_base_path
 
 
 class OfflineQueue:
-    def __init__(self):
+    def __init__(self, caminho=None):
         # offline_queue.jsonl fica na raiz do projeto
-        self.file_path = os.path.join(get_base_path(), "offline_queue.jsonl")
+        self.file_path = caminho or os.path.join(get_base_path(), "offline_queue.jsonl")
 
     def push_many(self, rows):
         """Adiciona lote de linhas ao final do arquivo (append).
@@ -43,6 +43,10 @@ class OfflineQueue:
         with open(self.file_path, "a", encoding="utf-8") as f:
             for row in rows:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            # Disco antes de o monitor avançar o offset (o cliente 2.0 avança o
+            # offset depois de pôr o lote na fila, para não empilhar duplicatas)
+            f.flush()
+            os.fsync(f.fileno())
 
     def peek_all(self):
         """Lê todos os registros da fila SEM apagar o arquivo.
@@ -72,6 +76,20 @@ class OfflineQueue:
         """Apaga a fila. Chamar SOMENTE após o insert ter dado commit no banco."""
         if os.path.exists(self.file_path):
             os.remove(self.file_path)
+
+    def rewrite(self, rows):
+        """Substitui a fila por 'rows' (o que sobrou de um reenvio parcial).
+        Atômico: temporário + os.replace — a fila nunca fica pela metade."""
+        if not rows:
+            self.commit()
+            return
+        tmp = self.file_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, self.file_path)
 
     def count(self):
         """Conta quantos registros estão na fila (para exibir no STATUS)."""

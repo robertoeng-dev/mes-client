@@ -1,0 +1,18 @@
+{
+  "delimitador": ",",
+  "encoding": "utf-8-sig",
+  "linha_cabecalho": 1,
+  "linha_dados": 2,
+  "max_min": "antes_da_medicao",
+  "campos": {
+    "serial_number": "BARCODE.1",
+    "result_status": "TESTRESULT",
+    "test_start_time": "TESTTIME",
+    "test_stop_time": null,
+    "model_name": "MODELNAME",
+    "defeito": null,
+    "anexo": null
+  },
+  "formato_data": "%Y%m%d%H%M%S",
+  "modelo_regex": "^(A[0-9]+)"
+}

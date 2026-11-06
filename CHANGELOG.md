@@ -5,6 +5,44 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.0.0] — em homologação (branch `proteus-2.0`)
+
+Cliente da plataforma **Proteus**. A estação deixa de ter "uma pasta, um formato e um Station ID digitado" e passa a ter **fontes de log cadastradas no servidor** ([Proteus — Servidor de Gerenciamento](https://github.com/robertoeng-dev/proteus)). O cliente só lê o cadastro e vincula as fontes deste PC.
+
+> **Não é compatível com a v1.0.5**: o banco recomeça do zero (`mes_nonalpha` / `mes_alpha`, schema 2) e cada estação é reinstalada.
+> O instalador ainda gera o config 1.0.5 e será ajustado na fase F4, junto com o port para Windows 7. Até lá, a v1.0.5 continua no `main`.
+
+### Adicionado
+
+- **Fontes de log por estação** (`vinculos:` no `config.yaml`). Um PC lê N fontes, cada uma com pasta, padrão de arquivo e formato. Offsets e fila offline são separados por fonte.
+- **Tela FONTES DESTE PC:**
+  - ADICIONAR com combos Planta → Seção → Linha → Estação → Fonte;
+  - REMOVER;
+  - TESTAR (prévia de 20 linhas, sem gravar);
+  - VINCULAR DE NOVO.
+  - A tela abre sozinha no primeiro start.
+- **Parser configurável** (`parser/configuravel.py`): CSV/TXT descrito por uma definição JSON no cadastro. Um log novo e simples entra sem código. Usa só a biblioteca padrão e roda no Python 3.8. É o mesmo arquivo do servidor de gerenciamento.
+- **`parser/registry.py`:** escolhe o parser dedicado (P2500S, PCM_TESTER, CYG) ou o configurável, e recusa formato desconhecido.
+- **Cache local do cadastro** (`state/station_cache.py`). Funciona com o banco fora do ar.
+- **Vínculo por PC:** a estação só grava do PC vinculado. Um PC clonado ou trocado é recusado até a engenharia liberar o vínculo no servidor.
+
+### Mudado
+
+- **`db_writer.py` sem DDL.**
+  - Confere a versão do schema (2) e lê `v_cadastro_fontes`.
+  - Grava por `fonte_id` e converte a hora local com o fuso da planta.
+  - Usa autocommit, sem sessão "idle in transaction".
+- O STATUS mostra uma linha por fonte. A CONFIG perdeu os campos pasta, Station ID e tabela.
+- `CLIENT_VERSION` = 2.0.0.
+
+### Testes
+
+- Paridade com a v1.0.5 nos logs reais: **122.611 linhas P2500S** (M13, 18 CSVs) e **49.536 linhas OCV** (M2, 9 CSVs) idênticas.
+- `test_cliente_f2.py`: 47 ok, com o monitor real contra o PostgreSQL de homologação.
+- Tela FONTES: 14 ok.
+
+---
+
 ## [1.0.5] — 2026-09-16
 
 Primeira versão a rodar fora das estações PCM Tester: linha Caiapó (BW P2500S,
@@ -80,6 +118,53 @@ modelo A08). Nenhuma mudança de comportamento para as estações já instaladas
   como histórico das PCM. `log.recursive` e `spec_check.enabled` passam a
   `false` por padrão: o P2500S grava numa pasta só e carrega Max/Min em cada
   linha, e `spec_limits.csv` só cobre A16.
+
+### Adicionado (25/09)
+
+- **Tabela `mes_stations`** (dimensão): `station_id → secao, line, station_type,
+  model, descricao`. Criada automaticamente pelo cliente (`db_writer.py`,
+  idempotente) — a partir de agora, linha/seção/tipo da estação não se repetem
+  mais em cada linha de teste, ficam cadastradas uma vez só. Mesmo desenho já
+  usado por `mes_results` (dashboard Caiapó, `caiapo_deploy/001_mes_results.sql`);
+  view de conveniência `v_mes_test_results` (JOIN por `station_id`) criada
+  manualmente no banco de produção.
+- Convenção de `station.id` documentada em `config.example.yaml`: formato curto
+  `{TIPO}-{NUM}` (ex.: `PCM-01`, `OCV-02`, `FT-01`, `TAB-01`), sem repetir
+  modelo/máquina/linha — essa informação já vive em colunas próprias
+  (`model_name`) ou em `mes_stations`.
+
+### Alterado (25/09)
+
+- **Reverte a decisão de 16/09** de congelar `mes_test_results` como "só
+  histórico das PCM": as estações novas (APURINA, BARE, CAIAPO, GUARANI,
+  MANAOS, MURA, TARUMA) gravam em `mes_test_results`, não em `mes_results`.
+  A tabela foi zerada (`TRUNCATE`) em 25/09 para começar limpa já com a
+  convenção de `station_id` nova.
+- **`test_start_time`/`test_stop_time` viram `TIMESTAMP`** (eram `TEXT`, sem
+  suporte a `BETWEEN`/`EXTRACT`/`date_trunc` — bloqueava filtro por dia,
+  hora, semana, mês e ano, e também particionamento futuro). Nova função
+  `_parse_test_time()` (`monitor/file_monitor.py`) converte o texto bruto do
+  equipamento antes do INSERT: reconhece o formato do PCM Tester
+  (`YYYYMMDDHHMMSS`, sem separadores) e ISO 8601; formato desconhecido vira
+  `NULL` e loga aviso — nunca adivinha (evita data errada por ambiguidade
+  dia/mês). Aplicado em produção em 25/09 sem perda: as 9.500 linhas já
+  gravadas desde o `TRUNCATE` estavam em formato ISO (`AAAA-MM-DD HH:MI:SS`)
+  e foram convertidas via cast direto.
+
+### Corrigido (20/10)
+
+- **Bandeja em erro de sync permanente nas estações sem cópia para a rede.**
+  O instalador gravava sempre `operation.mode: both`, e o monitor liga o
+  sync à força quando o modo é `both` (`sync.enabled` é ignorado). Com
+  `sync.destination_folder` vazio — caso da Caiapó M13 e de toda estação
+  instalada sem pasta de rede — cada ciclo logava `SYNC ERRO: Pasta destino
+  vazia` e a bandeja ficava em erro, sem perda de dados. Duas correções:
+  - `monitor/file_monitor.py`: em `both` com destino vazio, o sync é
+    desligado na partida (um único `WARNING`, status de sync `DESLIGADO`).
+    Em `sync` (somente cópia) destino vazio continua sendo erro visível.
+    Corrige também as estações já instaladas, ao atualizar o exe.
+  - `installer/MES_Client_Setup.iss`: sem pasta de rede o `config.yaml`
+    sai com `operation.mode: database`.
 
 ### Notas de campo (Caiapó, setembro/2026)
 

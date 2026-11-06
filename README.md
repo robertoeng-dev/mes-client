@@ -2,6 +2,11 @@
 
 > Sistema de coleta, processamento e rastreabilidade de dados de teste para linhas de produção de baterias e carregadores — Salcomp Manaus.
 
+> **Branch `proteus-2.0` — em homologação.** Esta branch é o cliente 2.0 da plataforma **Proteus**.
+> As fontes de log de cada estação são cadastradas no [Proteus — Servidor de Gerenciamento](https://github.com/robertoeng-dev/proteus) e vinculadas neste PC pela tela **FONTES DESTE PC**.
+> Veja o [CHANGELOG](CHANGELOG.md#200--em-homologação-branch-proteus-20).
+> O texto abaixo ainda descreve a v1.0.5 e será revisado na fase F4 (instalador + Windows 7). A versão em produção continua no `main`.
+
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13%2B-336791?logo=postgresql&logoColor=white)

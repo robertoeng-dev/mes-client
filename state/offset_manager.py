@@ -25,9 +25,10 @@ from config.loader import get_base_path
 
 
 class OffsetManager:
-    def __init__(self):
-        # offsets.json fica na raiz do projeto, ao lado do config.yaml
-        self.file = os.path.join(get_base_path(), "offsets.json")
+    def __init__(self, caminho=None):
+        # offsets.json fica na raiz do projeto, ao lado do config.yaml.
+        # Cliente 2.0: a chave é "fonte_id|caminho" (ver file_monitor).
+        self.file = caminho or os.path.join(get_base_path(), "offsets.json")
 
         if not os.path.exists(self.file):
             self._save({})

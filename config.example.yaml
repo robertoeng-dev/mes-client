@@ -1,46 +1,46 @@
-# config.example.yaml — Modelo de configuração do MES Client
+# config.example.yaml — Modelo de configuração do MES Client 2.0
 #
-# Copie este arquivo para config.yaml e ajuste para cada estação.
-# O instalador (MES_Client_Setup.iss) gera o config.yaml automaticamente.
+# Copie para config.yaml (o instalador gera sozinho). config.yaml NÃO vai
+# para o git: tem dados de cada PC.
 #
-# ATENÇÃO: config.yaml NÃO deve ser commitado no git (está no .gitignore).
-#          Ele contém dados específicos de cada estação de teste.
+# Cliente 2.0 = cadastro centralizado. Estação, linha, seção, formato do log
+# e padrão de arquivo vêm do servidor (MES Cadastro). Aqui fica só:
+# a conexão do domínio e quais fontes ESTE PC lê, e de qual pasta.
+# Os vínculos são criados pela tela FONTES DESTE PC (não precisa editar à mão).
 
 database:
   enabled: true
-  host: 192.168.1.100          # IP do servidor PostgreSQL
+  host: 172.21.70.184          # servidor PostgreSQL
   port: 5432
-  name: mes_db
-  user: mes_user
-  password: ${MES_DB_PASSWORD} # Definido no arquivo .env (NUNCA hardcoded)
-  table: mes_results           # geração atual (todas as linhas); mes_test_results é o histórico PCM
-  jsonb_index: false           # GIN em row_data: só ligue se alguém consultar dentro do JSON
+  name: mes_nonalpha           # banco do domínio: mes_nonalpha | mes_alpha
+  user: mes_client_nonalpha    # role das estações do domínio
+  password: ${MES_DB_PASSWORD} # no arquivo .env (NUNCA aqui)
+  # O cliente NÃO cria banco nem tabela; confere mes_schema_version = 2.
 
-station:
-  id: PCM_A06_BR-PCMTEST-01    # Formato: {prefixo}_{modelo}_{maquina} — prefixo PCM, FUNC ou TABC
-  type: AUTO                   # AUTO (detecta pelo arquivo) | PCM_TESTER | CYG | P2500S (BW P2500S, Caiapó/A08)
-  model: A06                   # Modelo do produto (A06, A17, A16...)
-  line: NAVAJO                 # Linha de produção
+cliente:
+  host_id: ""                  # vazio = nome do PC (COMPUTERNAME). É o nome
+                               # que o banco compara com o vínculo da estação.
 
-log:
-  folder: D:\Testpad\CSV\A06   # Pasta onde o equipamento gera os CSVs
-  recursive: false             # true só quando o testador grava em subpastas por modelo (TestPad)
+vinculos:                      # fontes de log lidas por este PC
+  - estacao: CAIAPO-M13-FT     # código cadastrado no MES Cadastro
+    fonte: FT                  # fonte dentro da estação (FT, OCV, AOI...)
+    pasta: D:\battData         # pasta local onde o equipamento grava
+    sync_destino: ""           # opcional: cópia dos arquivos para a rede
 
 operation:
-  mode: both                   # "database" | "sync" | "both"
+  mode: database               # "database" | "both" (banco + cópia) | "sync" (só cópia)
 
 sync:
-  enabled: true
-  destination_folder: \\192.168.1.100\MES\logs\A06   # Samba share de destino
-  mode: diff                   # "diff" (só o que mudou) | "copy" | "sync"
+  destination_folder: ""       # usado só se houver UM vínculo sem sync_destino
+  mode: diff                   # "diff" | "copy_overwrite" | "sync"
 
 parser:
-  scan_interval: 5             # Intervalo de varredura em segundos
+  scan_interval: 5             # segundos entre leituras
 
 spec_check:
-  enabled: false               # P2500S grava Max/Min em cada linha; spec_limits.csv só cobre A16
-  file: spec_limits.csv        # Limites LSL/USL por modelo e passo de teste
+  enabled: false
+  file: spec_limits.csv
 
 auth:
-  operador_password: ""        # Vazio = OPERADOR sem senha
-  engenharia_password: "admin" # Senha para ações restritas (editar config, parar, sair)
+  operador_password: ""        # vazio = OPERADOR sem senha (arranque automático)
+  engenharia_password: "admin" # ações restritas: CONFIG, FONTES, parar, sair

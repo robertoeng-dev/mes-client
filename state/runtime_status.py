@@ -10,13 +10,14 @@
 # snapshot() retorna uma CÓPIA do dict — não deixa a UI segurar o lock.
 # =============================================================================
 
+import copy
 import threading
 from datetime import datetime
 
 
 # Fonte única da versão exibida nas telas STATUS e ABOUT.
 # Manter em sincronia com o AppVersion do installer/MES_Client_Setup.iss.
-CLIENT_VERSION = "1.0.5"
+CLIENT_VERSION = "2.0.0"
 
 
 class RuntimeStatus:
@@ -56,7 +57,14 @@ class RuntimeStatus:
             "last_serial":           "",
             "last_result":           "",
             "files_monitored":       0,
-            "session_rows_skipped":  0
+            "session_rows_skipped":  0,
+
+            # Cliente 2.0: uma entrada por fonte vinculada ("ESTACAO/FONTE")
+            # {estacao, fonte, pasta, status, detalhe, ultimo_arquivo,
+            #  ultimo_insert, total_sessao}
+            "fontes":                {},
+            "host_id":               "",
+            "schema_status":         ""
         }
 
     def set(self, key, value):
@@ -72,7 +80,21 @@ class RuntimeStatus:
     def snapshot(self):
         """Retorna cópia do estado atual. Use na UI para não segurar o lock."""
         with self._lock:
-            return dict(self.data)
+            return copy.deepcopy(self.data)
+
+    def set_fonte(self, chave, **campos):
+        """Atualiza a entrada de uma fonte (cria se não existir). Thread-safe."""
+        with self._lock:
+            f = self.data["fontes"].setdefault(chave, {
+                "estacao": "", "fonte": "", "pasta": "", "status": "", "detalhe": "",
+                "ultimo_arquivo": "", "ultimo_insert": "", "total_sessao": 0})
+            soma = campos.pop("somar_total", 0)
+            f.update(campos)
+            f["total_sessao"] += soma
+
+    def reset_fontes(self):
+        with self._lock:
+            self.data["fontes"] = {}
 
     def mark_insert(
         self,
