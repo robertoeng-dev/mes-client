@@ -29,7 +29,7 @@ if os.environ.get("MES_SMOKE_FILHO") != "1":
         ".venv", "build", "dist", "__pycache__", "*.log", "offsets.json", "offline_queue.jsonl",
         "cadastro_cache.json", "config.yaml", ".env"))
     env = dict(os.environ, MES_SMOKE_FILHO="1",
-               MES_AMOSTRAS=os.path.join(os.path.dirname(ORIGEM), "Logs-Amostras"))
+               MES_AMOSTRAS=os.path.join(os.path.dirname(ORIGEM), "Logs-Amostras", "CAIAPO"))
     r = subprocess.run([sys.executable, "-u", os.path.join(app, "tests", "smoke_ui_fontes.py"), TMP], env=env)
     sys.exit(r.returncode)
 

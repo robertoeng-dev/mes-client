@@ -81,14 +81,17 @@ def resolve_field(field: str, row: dict, model_name: str, mappings: dict):
 
     Retorna string com o valor encontrado, ou None se nenhuma coluna bater.
     """
-    col_names = (
-        mappings.get(model_name, {}).get(field)
-        or mappings.get("DEFAULT", {}).get(field, [])
-    )
-    if isinstance(col_names, str):
-        col_names = [col_names]
+    def _lista(v):
+        return [v] if isinstance(v, str) else list(v or [])
 
-    for col in (col_names or []):
+    # Colunas do modelo primeiro e, se nenhuma existir na linha, as do DEFAULT.
+    # O mapeamento é por MODELO, mas o mesmo modelo passa por formatos
+    # diferentes: o A08 tem TESTRESULT no P2500S e test_result no PCM
+    # (Carajás PCM-02). Sem o DEFAULT, o PCM A08 ficava sem resultado e sem data.
+    col_names = _lista(mappings.get(model_name, {}).get(field))
+    col_names += [c for c in _lista(mappings.get("DEFAULT", {}).get(field)) if c not in col_names]
+
+    for col in col_names:
         val = row.get(col)
         if val is not None and str(val).strip():
             return str(val).strip()

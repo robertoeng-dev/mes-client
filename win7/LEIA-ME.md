@@ -8,7 +8,7 @@ Esta pasta guarda **tudo o que é só da edição Windows 7**. A edição Window
 | Pacote do parser | `parser/` | `csvparser/` (no 3.8, `parser` é um módulo embutido do Python) |
 | Spec do PyInstaller | `parser_TE.spec` | `win7/MES_Client_Win7.spec` (PyInstaller 5.13.2, sem UPX) |
 | Instalador | `installer/MES_Client_Setup.iss` | `win7/installer/MES_Client_Setup_Win7.iss` |
-| Arquivo gerado | `Proteus_Client_Setup_v2.0.0.exe` | `Proteus_Client_Setup_v2.0.0-win7.exe` |
+| Arquivo gerado | `Proteus_Client_Setup_v2.0.2.exe` | `Proteus_Client_Setup_v2.0.2-win7.exe` |
 | Windows mínimo | 8.1 (`MinVersion=6.3`) | 7 SP1 (`MinVersion=6.1sp1`) |
 | Pré-requisitos | nenhum | KB2533623 (conferido) e UCRT KB2999226 (embutido) |
 | Nome no Painel de Controle | Proteus Client | Proteus Client (Windows 7) |
@@ -38,7 +38,7 @@ python win7\gerar_edicao_win7.py
 ..\WINDOWS7_v2.0\src\build_win7.bat
 ```
 
-O resultado fica em `..\WINDOWS7_v2.0\src\installer\Output\Proteus_Client_Setup_v2.0.0-win7.exe`.
+O resultado fica em `..\WINDOWS7_v2.0\src\installer\Output\Proteus_Client_Setup_v2.0.2-win7.exe`.
 
 Os pacotes `Windows6.1-KB2999226-x86.msu` e `-x64.msu` não vão para o GitHub, porque são binários da Microsoft. O gerador procura os dois em `win7\prereqs\` e, se não achar, em `..\WINDOWS7_v1.0.5\src\installer\prereqs\`. Num clone limpo, baixe-os do Microsoft Update Catalog (KB2999226) e coloque-os em `win7\prereqs\`.
 

@@ -5,7 +5,7 @@
 ; ==============================================================================
 ; EDICAO WINDOWS 10/11 (Python 3.13, 64 bits).
 ;   Compilar: ISCC.exe installer\MES_Client_Setup.iss
-;   Saida   : installer\Output\Proteus_Client_Setup_v2.0.0.exe
+;   Saida   : installer\Output\Proteus_Client_Setup_v2.0.1.exe
 ;   Para Windows 7 NAO use este arquivo: a edicao Win7 fica separada em
 ;   win7\ (win7\installer\MES_Client_Setup_Win7.iss, build win7\build_win7.bat).
 ;
@@ -23,7 +23,7 @@
 ; novo e' gerado. Um config.yaml que ja' e' 2.0 e' preservado.
 ;
 ; Instalacao silenciosa (sem wizard), para escalar em varias estacoes:
-;   Proteus_Client_Setup_v2.0.0.exe /SILENT /DOMINIO=NONALPHA /DBPASS=<senha>
+;   Proteus_Client_Setup_v2.0.1.exe /SILENT /DOMINIO=NONALPHA /DBPASS=<senha>
 ;       /STATION=CAIAPO-M13-FT /FONTE=FT /PASTA="D:\battData"
 ;   Opcionais (com padrao): /DBHOST=172.21.70.184 /DBPORT=5432
 ;       /DBNAME=mes_<dominio> /DBUSER=mes_client_<dominio> /SYNC=""
@@ -32,7 +32,7 @@
 ; ==============================================================================
 
 #define AppName      "Proteus Client"
-#define AppVersion   "2.0.0"
+#define AppVersion   "2.0.2"
 #define AppPublisher "Salcomp - Engenharia de Teste"
 #define AppCopyright "Salcomp Manaus 2026"
 #define InstallDir   "C:\Utility\MES"
@@ -79,7 +79,7 @@ PrivilegesRequired=admin
 
 ; Aparencia dark premium
 WizardStyle=modern
-WizardSizePercent=100
+WizardSizePercent=120
 
 ; Imagens dark (geradas em assets/)
 WizardImageFile=..\assets\installer_banner.bmp
@@ -273,6 +273,56 @@ end;
 
 
 { --------------------------------------------------------------------------
+  Campos de pasta da pagina da fonte: botao "..." (escolher a pasta) e
+  autocompletar do Windows (SHAutoComplete) para evitar erro de digitacao.
+  -------------------------------------------------------------------------- }
+const
+  SHACF_FILESYS_DIRS = $20;
+
+function SHAutoComplete(hwndEdit: HWND; dwFlags: DWORD): Integer;
+  external 'SHAutoComplete@shlwapi.dll stdcall';
+
+procedure ProcurarPastaClick(Sender: TObject);
+var
+  Idx: Integer;
+  Dir, Prompt: String;
+begin
+  Idx := TNewButton(Sender).Tag;
+  Dir := Trim(PageFonte.Values[Idx]);
+  if Idx = 2 then
+    Prompt := 'Pasta onde o equipamento grava os arquivos CSV:'
+  else
+    Prompt := 'Pasta de rede para a copia dos arquivos (opcional):';
+  if BrowseForFolder(Prompt, Dir, False) then
+    PageFonte.Values[Idx] := Dir;
+end;
+
+procedure CampoDePasta(Idx: Integer);
+var
+  E: TPasswordEdit;
+  B: TNewButton;
+begin
+  E := PageFonte.Edits[Idx];
+  B := TNewButton.Create(PageFonte);
+  B.Parent := E.Parent;
+  B.Caption := '...';
+  B.Tag := Idx;
+  B.Width := ScaleX(32);
+  B.Height := E.Height + ScaleY(2);
+  E.Width := E.Width - B.Width - ScaleX(6);
+  B.Left := E.Left + E.Width + ScaleX(6);
+  B.Top := E.Top - ScaleY(1);
+  B.Anchors := [akTop, akRight];
+  B.OnClick := @ProcurarPastaClick;
+  try
+    SHAutoComplete(E.Handle, SHACF_FILESYS_DIRS);
+  except
+    { sem autocompletar: o botao "..." continua valendo }
+  end;
+end;
+
+
+{ --------------------------------------------------------------------------
   InitializeWizard: executado uma vez ao abrir o wizard (tambem no /SILENT)
   -------------------------------------------------------------------------- }
 procedure InitializeWizard;
@@ -336,9 +386,7 @@ begin
     PageSenha.ID,
     'Fonte de log deste PC (opcional)',
     'Qual log do equipamento este PC envia ao banco',
-    'Use os códigos cadastrados no servidor de gerenciamento. Deixe estação e fonte ' +
-    'vazias para vincular depois pela tela FONTES DESTE PC (abre sozinha no primeiro start). ' +
-    'O vínculo é confirmado pelo servidor quando o cliente abre.');
+    'Códigos do servidor de gerenciamento. Vazio = vincular depois na tela FONTES DESTE PC.');
   PageFonte.Add('Código da estação (ex: CAIAPO-M13-FT):', False);
   PageFonte.Add('Fonte (ex: FT, OCV, AOI):', False);
   PageFonte.Add('Pasta onde o equipamento grava os logs (ex: D:\battData):', False);
@@ -347,6 +395,8 @@ begin
   PageFonte.Values[1] := UpperCase(Param('FONTE', ''));
   PageFonte.Values[2] := Param('PASTA', '');
   PageFonte.Values[3] := Param('SYNC', '');
+  CampoDePasta(2);
+  CampoDePasta(3);
 end;
 
 
@@ -403,6 +453,14 @@ begin
       Result := False;
       Exit;
     end;
+    { Pasta digitada errado e' o erro mais comum: confirma se nao existe }
+    if (Trim(PageFonte.Values[2]) <> '') and not DirExists(Trim(PageFonte.Values[2])) then
+      if MsgBox('A pasta "' + Trim(PageFonte.Values[2]) + '" nao existe neste PC.' + #13#10 +
+                'Confira se foi digitada certo (use o botao "...").' + #13#10#13#10 +
+                'Continuar assim mesmo?', mbConfirmation, MB_YESNO) = IDNO then begin
+        Result := False;
+        Exit;
+      end;
   end;
 end;
 

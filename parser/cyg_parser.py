@@ -26,9 +26,11 @@
 # =============================================================================
 
 import os
-import io
 import csv
 import re
+
+from parser.configuravel import (cabecalho_vizinho, colunas_mais_comuns,
+                                 montar_registros, segurar_quebra)
 
 
 def _parse_csv_line(line_text):
@@ -54,7 +56,7 @@ GARBAGE_CHAR_ABS    = 3     # >=3 chars U+FFFD/não-imprimíveis => lixo binári
 GARBAGE_CHAR_RATIO  = 0.05  # ou >5% de todos os caracteres da linha
 
 
-def _row_reject_reason(cleaned, headers, has_extra_columns):
+def _row_reject_reason(cleaned, headers, has_extra_columns, has_missing=True):
     """Retorna None se a linha parece dado real; senão um código curto do
     motivo da rejeição: 'header_repeat' | 'extra_columns' | 'too_few_fields'
     | 'garbage_chars'.
@@ -75,10 +77,15 @@ def _row_reject_reason(cleaned, headers, has_extra_columns):
     if has_extra_columns:
         return "extra_columns"
 
-    # 3) Linha truncada/curta: DictReader preenche células faltantes com None
+    # 3) Poucos campos. O mínimo de 25% preenchido só vale para linha TRUNCADA
+    #    (menos células que o header). Linha completa e esparsa é dado real: o
+    #    PCM tem ~199 colunas e cada teste só preenche as etapas que rodou
+    #    (Navajo A17: PASS com ~47 de 197; FAIL abortado no início, menos ainda).
     populated = [v for k, v in cleaned.items() if k and v]
-    if len(populated) < max(MIN_POPULATED_ABS,
-                            int(MIN_POPULATED_RATIO * len(non_empty_headers))):
+    minimum = MIN_POPULATED_ABS
+    if has_missing:
+        minimum = max(minimum, int(MIN_POPULATED_RATIO * len(non_empty_headers)))
+    if len(populated) < minimum:
         return "too_few_fields"
 
     # 4) Lixo binário: U+FFFD (de errors='replace') ou não-imprimíveis.
@@ -232,6 +239,18 @@ def read_header_and_meta(file_path, station_type="AUTO"):
 
         csv_format = detect_csv_format(second_values, station_type, headers)
 
+        # P2500S sem cabeçalho (M13 20260903_A08.csv começa direto em
+        # "NULL,NG sub-scan failed,..." e o BARCODE.1,... nunca é gravado):
+        # usa o cabeçalho do arquivo vizinho da mesma pasta, e os dados
+        # começam na linha 1.
+        borrowed = None
+        if csv_format == "P2500S" and not _is_p2500s_header(headers):
+            n_cols = colunas_mais_comuns(file_path)
+            cab, borrowed = cabecalho_vizinho(file_path, _is_p2500s_header, n_cols)
+            if cab is not None:
+                headers, after_header = cab, 0
+                second_values = _parse_csv_line(header_line.rstrip("\n"))
+
         upper_map   = {}
         lower_map   = {}
         unit_map    = {}
@@ -290,7 +309,8 @@ def read_header_and_meta(file_path, station_type="AUTO"):
         "lower_map":         lower_map,
         "unit_map":          unit_map,
         "display_map":       display_map,
-        "data_start_offset": data_start_offset   # bytes — usado no f.seek()
+        "data_start_offset": data_start_offset,  # bytes — usado no f.seek()
+        "cabecalho_de":      borrowed,           # None = o próprio arquivo
     }
 
 
@@ -330,6 +350,7 @@ def parse_appended_rows(file_path, last_state, station_type="AUTO"):
             current_offset = meta["data_start_offset"]
 
     complete_lines = []
+    line_ends      = []
     new_offset     = current_offset
 
     with open(file_path, "r", encoding="utf-8-sig", errors="replace", newline="") as f:
@@ -347,7 +368,15 @@ def parse_appended_rows(file_path, last_state, station_type="AUTO"):
             # NUL vira U+FFFD: o csv do Python 3.8 (edição Win7) aborta o arquivo
             # inteiro com "line contains NUL"; os dois contam igual como lixo.
             complete_lines.append(line.replace("\x00", "\ufffd"))
-            new_offset = f.tell()   # posição APÓS esta linha — próximo ponto de início
+            line_ends.append(f.tell())   # posição APÓS esta linha
+
+    # Última linha curta num arquivo que acabou de mudar: pode ser a 1ª metade
+    # de um registro quebrado por LF solto — espera a próxima leitura.
+    hold = segurar_quebra(file_path, complete_lines, len(headers))
+    if hold:
+        complete_lines, line_ends = complete_lines[:-hold], line_ends[:-hold]
+    if line_ends:
+        new_offset = line_ends[-1]
 
     if not complete_lines:
         return {
@@ -359,33 +388,34 @@ def parse_appended_rows(file_path, last_state, station_type="AUTO"):
             "schema":      meta
         }
 
-    # csv.DictReader com io.StringIO: parseia linhas em memória sem abrir arquivo novamente
-    reader = csv.DictReader(
-        io.StringIO("".join(complete_lines)),
-        fieldnames=headers
-    )
-
     rows    = []
     skipped = []   # [(line_no, motivo), ...] — linhas rejeitadas pela validação
 
-    for row in reader:
-        current_line_no += 1
+    # montar_registros junta os pedaços de um registro quebrado por LF solto e
+    # devolve o passo do contador igual ao csv.DictReader de antes (linha vazia
+    # não conta; registro de N pedaços conta N), então as linhas boas mantêm o
+    # mesmo source_line_no da v1.0.5.
+    for step, text, _ in montar_registros(complete_lines, len(headers)):
+        if text is None:
+            continue
+        current_line_no += step
+        line_no = current_line_no - step + 1
 
-        # Células além do número de colunas do header ficam sob a chave None
-        extra = row.pop(None, None)
+        values  = _parse_csv_line(text.rstrip("\r\n"))
+        cleaned = {_safe_strip(h): _safe_strip(v) for h, v in zip(headers, values)}
+        for h in headers[len(values):]:
+            cleaned[_safe_strip(h)] = None   # célula ausente (linha truncada)
 
-        # Limpa espaços em todas as chaves e valores
-        cleaned = {_safe_strip(k): _safe_strip(v) for k, v in row.items()}
-
-        reason = _row_reject_reason(cleaned, headers, has_extra_columns=extra is not None)
+        reason = _row_reject_reason(cleaned, headers,
+                                    has_extra_columns=len(values) > len(headers),
+                                    has_missing=len(values) < len(headers))
         if reason:
             # O offset continua avançando (não reprocessar lixo para sempre) e
-            # current_line_no conta a linha pulada (source_line_no continua
-            # alinhado com o arquivo físico).
-            skipped.append((current_line_no, reason))
+            # o contador conta a linha pulada.
+            skipped.append((line_no, reason))
             continue
 
-        cleaned["_line_no"] = current_line_no   # número de linha para source_line_no no banco
+        cleaned["_line_no"] = line_no   # número de linha para source_line_no no banco
         rows.append(cleaned)
 
     return {

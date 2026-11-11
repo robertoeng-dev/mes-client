@@ -5,6 +5,34 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.0.2] — 2026-11-10 (homologação)
+
+Correções do primeiro teste na estação Caiapó M13 (Windows 7).
+
+### Corrigido
+
+- **O cliente não abria mais depois da 1ª execução** (`WinError 123` no `makedirs` da pasta de log). Em algumas aberturas o `sys.executable` do exe chegava com lixo de memória (um pedaço do PATH, `...Server\140\DTS\Binn\;C:`). Agora, se o caminho não existe, o cliente pega o caminho real do exe pelo Windows (`GetModuleFileNameW`) e registra o aviso no log. Se a pasta de log não puder ser criada, o log vai para `%TEMP%\Proteus_Client_logs` e o cliente abre assim mesmo.
+- **Wizard: o campo "Cópia dos arquivos para a rede" ficava fora da tela.** A janela do instalador ficou 20% maior e o texto da página da fonte foi encurtado.
+
+### Adicionado
+
+- **Wizard: botão "..." e autocompletar** nos campos "Pasta onde o equipamento grava os logs" e "Cópia para a rede". O "..." abre a escolha de pasta do Windows e o autocompletar usa `SHAutoComplete`. Se a pasta digitada não existir no PC, o instalador pergunta antes de seguir.
+
+---
+
+## [2.0.1] — 2026-11-10 (homologação)
+
+Correções achadas rodando o cliente sobre os logs reais de 10 estações
+(Caiapó M13/M2 OCV/AOI, Guarani, Mura, Taruma, Apurinã, Carajás PCM-01/02, Navajo PCM).
+
+### Corrigido
+
+- **PCM perdia testes reais.** A regra "pelo menos 25% das colunas preenchidas" agora só vale para linha truncada. O PCM tem ~199 colunas e cada teste preenche só as etapas que rodou. Na Navajo (A17), 1.163.213 de 1.163.743 testes eram descartados, e na Carajás o FAIL abortado no início. A regra vinha da v1.0.x.
+- **PCM A08 sem resultado e sem data.** O mapeamento de colunas é por modelo, e o A08 apontava para as colunas do P2500S (`TESTRESULT`/`TESTTIME`). Agora, quando a coluna do modelo não existe na linha, o cliente usa as colunas `DEFAULT` (`test_result`/`test_time`).
+- **Registro FAIL quebrado por LF solto** (Guarani, Taruma, Apurinã: "NO Data"). Antes virava duas linhas erradas no banco; agora os pedaços são juntados. A junção só acontece quando cada pedaço termina no delimitador e a soma dá exatamente o número de colunas, então uma linha de evento nunca é emendada. Se a metade final ainda não foi gravada, o cliente espera até 30 s.
+- **Arquivo P2500S sem cabeçalho** (M13 `20260903_A08.csv`): o cliente usa o cabeçalho do arquivo vizinho na mesma pasta. Eram 2.841 testes perdidos num dia.
+- As linhas que a v1.0.5/2.0.0 já gravava continuam **idênticas**: mesmo número de linha, mesmos campos e mesmo offset (teste de paridade).
+
 ## [2.0.0] — em homologação (branch `proteus-2.0`)
 
 Cliente da plataforma **Proteus**. A estação deixa de ter "uma pasta, um formato e um Station ID digitado" e passa a ter **fontes de log cadastradas no servidor** ([Proteus — Servidor de Gerenciamento](https://github.com/robertoeng-dev/proteus)). O cliente só lê o cadastro e vincula as fontes deste PC.

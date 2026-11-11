@@ -36,8 +36,8 @@ USER = "mes_homolog"
 BASE = "mes_nonalpha_homolog"
 TESTE_DB = "mes_teste_cli_%d" % os.getpid()
 SQL_002 = os.path.join(RAIZ, "database", "002_cadastro.sql")
-AMOSTRAS = os.environ.get("MES_AMOSTRAS") or os.path.join(os.path.dirname(RAIZ), "Logs-Amostras")
-M13_PEQ = os.path.join(AMOSTRAS, "M13 Station", "202609", "20260903_A08.csv")     # 10 boas
+AMOSTRAS = os.environ.get("MES_AMOSTRAS") or os.path.join(os.path.dirname(RAIZ), "Logs-Amostras", "CAIAPO")
+M13_PEQ = os.path.join(AMOSTRAS, "M13 Station", "202609", "20260903_A08.csv")     # sem cabeçalho: usa o do vizinho (2.841 testes)
 M13_GDE = os.path.join(AMOSTRAS, "M13 Station", "202609", "20260915_A08.csv")     # 3367 boas
 M2_OCV = os.path.join(AMOSTRAS, "M2 Station", "202609", "20260911_A08 CELL 30% CAIAPO.csv")
 OCV_DEF = json.load(open(os.path.join(RAIZ, "database", "formatos", "OCV_TABCUT.json"), encoding="utf-8"))

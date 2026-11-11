@@ -4,6 +4,40 @@ import sys
 import yaml
 
 
+def _caminho_exe_real():
+    """Caminho do .exe pelo Windows (GetModuleFileNameW). None fora do Windows
+    ou se a chamada falhar."""
+    try:
+        import ctypes
+        buf = ctypes.create_unicode_buffer(32768)
+        n = ctypes.windll.kernel32.GetModuleFileNameW(None, buf, len(buf))
+        return buf.value if n else None
+    except Exception:
+        return None
+
+
+def _corrigir_sys_executable():
+    """M13 (Win7, 10/11/2026): em algumas aberturas o sys.executable do exe
+    PyInstaller chegou com lixo de memória (um pedaço do PATH), e o
+    makedirs da pasta de log derrubava o cliente com WinError 123. Se a
+    pasta do sys.executable não existe, troca pelo caminho dado pelo Windows."""
+    if not getattr(sys, "frozen", False):
+        return None
+    atual = sys.executable or ""
+    if atual and os.path.isfile(atual):
+        return None
+    real = _caminho_exe_real()
+    if not real or not os.path.isfile(real):
+        real = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else None
+    if real and os.path.isfile(real):
+        sys.executable = real
+        return atual          # o logger registra o valor errado
+    return None
+
+
+EXECUTABLE_CORRIGIDO = _corrigir_sys_executable()
+
+
 def get_base_path():
     """
     Retorna a pasta base do sistema.
