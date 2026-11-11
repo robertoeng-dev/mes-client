@@ -31,6 +31,12 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+# 2.0.3: modo do instalador (--wizard catalogo|vincular). Sai antes da UI, da
+# bandeja e do SingleInstance: roda mesmo com o cliente antigo aberto.
+if __name__ == "__main__" and "--wizard" in sys.argv:
+    from system.wizard_helper import main as _wizard_main
+    sys.exit(_wizard_main(sys.argv))
+
 import threading
 import csv as _csv
 import tkinter as tk

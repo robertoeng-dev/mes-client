@@ -5,6 +5,25 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.0.3] — 2026-11-11 (homologação)
+
+### Adicionado
+
+- **Wizard: estação escolhida no cadastro do servidor** (pendência 47). Depois da senha, o instalador consulta o Proteus e mostra listas em cascata Planta → Seção → Linha → Estação/fonte. Só aparecem as **ativas e livres**; as ocupadas por outro PC ficam ocultas, e a tela informa quantas são. Ao avançar, o slot é **reservado na hora** pela mesma função do banco que o cliente usa (`mes_vincular_estacao`). Se outro PC reservou antes, o banco recusa e a lista é atualizada. Só o painel Proteus libera um slot (Engenharia/Administrador). Na reinstalação no mesmo PC, a estação dele aparece como "já vinculada a este PC".
+- **Aviso de nome de PC fora do padrão** `<LINHA>-<MÁQUINA>` (ex.: `CAIAPO-M13`, até 15 caracteres), porque o vínculo fica preso ao nome do PC. É só aviso, não bloqueia.
+- **Modo do exe para o instalador**: `MES_Client.exe --wizard catalogo|vincular` (`system/wizard_helper.py`). Roda sem interface e antes do controle de instância única. Recebe a senha num arquivo temporário, que é apagado ao ler, e devolve texto ASCII.
+- Parâmetro `/DBROLE=` (homologação): grava `set_role` no config gerado.
+
+### Corrigido
+
+- **Atualização mostrava o banco e o usuário padrão de produção** (pendência 44). Agora host, porta, banco, usuário e `set_role` vêm do `config.yaml` 2.0 atual, e a senha vem do `.env`. A conexão é testada antes de instalar: uma senha errada aparece no wizard, e não depois, com o cliente parado. Numa atualização 2.0, as páginas de estação e fonte são puladas, porque o config é preservado.
+
+### Sem rede / sem servidor / Win7 sem UCRT
+
+- O wizard volta ao modo manual da 2.0.2: estação digitada ou vinculada depois na tela FONTES DESTE PC. A instalação silenciosa não mudou.
+
+---
+
 ## [2.0.2] — 2026-11-10 (homologação)
 
 Correções do primeiro teste na estação Caiapó M13 (Windows 7).

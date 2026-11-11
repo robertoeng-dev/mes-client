@@ -17,7 +17,7 @@ from datetime import datetime
 
 # Fonte única da versão exibida nas telas STATUS e ABOUT.
 # Manter em sincronia com o AppVersion do installer/MES_Client_Setup.iss.
-CLIENT_VERSION = "2.0.2"
+CLIENT_VERSION = "2.0.3"
 
 
 class RuntimeStatus:

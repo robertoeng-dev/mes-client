@@ -55,5 +55,5 @@ echo === Inno Setup (edicao WIN7) ===
 "%ISCC%" /Q installer\MES_Client_Setup_Win7.iss || exit /b 1
 
 echo.
-echo Pronto: installer\Output\Proteus_Client_Setup_v2.0.2-win7.exe
+echo Pronto: installer\Output\Proteus_Client_Setup_v2.0.3-win7.exe
 endlocal

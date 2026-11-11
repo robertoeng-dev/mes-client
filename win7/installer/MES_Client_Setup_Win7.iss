@@ -7,7 +7,7 @@
 ;   Nao compile direto daqui: o build_win7.bat roda na pasta gerada por
 ;   win7\gerar_edicao_win7.py (padrao WINDOWS7_v2.0\src), onde este arquivo
 ;   fica em installer\ e os pre-requisitos em installer\prereqs\*.msu.
-;   Saida: installer\Output\Proteus_Client_Setup_v2.0.1-win7.exe
+;   Saida: installer\Output\Proteus_Client_Setup_v2.0.3-win7.exe
 ;   Diferencas para a edicao Windows 10 (marcadas [WIN7] no codigo):
 ;     - confere KB2533623 (AddDllDirectory) - sem ele o Python 3.8 nao carrega
 ;     - instala o UCRT (KB2999226, embutido) se faltar ucrtbase.dll
@@ -27,16 +27,21 @@
 ; novo e' gerado. Um config.yaml que ja' e' 2.0 e' preservado.
 ;
 ; Instalacao silenciosa (sem wizard), para escalar em varias estacoes:
-;   Proteus_Client_Setup_v2.0.1-win7.exe /SILENT /DOMINIO=NONALPHA /DBPASS=<senha>
+;   Proteus_Client_Setup_v2.0.3-win7.exe /SILENT /DOMINIO=NONALPHA /DBPASS=<senha>
 ;       /STATION=CAIAPO-M13-FT /FONTE=FT /PASTA="D:\battData"
 ;   Opcionais (com padrao): /DBHOST=172.21.70.184 /DBPORT=5432
 ;       /DBNAME=mes_<dominio> /DBUSER=mes_client_<dominio> /SYNC=""
+;       /DBROLE=<role> (so' homologacao: SET ROLE apos conectar, ex. mes_grp_client)
+;
+; 2.0.3: no wizard (nao no silencioso) a estacao e' escolhida em listas lidas
+; do servidor (installer\wizard_estacao.iss) e o slot e' reservado ao avancar.
+; Numa atualizacao 2.0, banco/usuario vem do config.yaml e a senha do .env.
 ;   /DOMINIO aceita NONALPHA ou ALPHA. /DBPASS e' obrigatorio no silencioso.
 ;   Nunca grave a linha com /DBPASS em arquivo.
 ; ==============================================================================
 
 #define AppName      "Proteus Client"
-#define AppVersion   "2.0.2"
+#define AppVersion   "2.0.3"
 #define AppPublisher "Salcomp - Engenharia de Teste"
 #define AppCopyright "Salcomp Manaus 2026"
 #define InstallDir   "C:\Utility\MES"
@@ -419,6 +424,17 @@ begin
 end;
 
 
+{ 2.0.3: o wizard chama o MES_Client.exe novo para ler o cadastro do servidor.
+  Edicao WIN7: o exe (Python 3.8) so' roda com o KB2533623 e o UCRT; sem eles o
+  wizard fica no modo manual (o UCRT e' instalado depois, no PrepareToInstall). }
+function PodeRodarAjudante: Boolean;
+begin
+  Result := TemAddDllDirectory and TemUcrt;
+end;
+
+#include "wizard_estacao.iss"
+
+
 { --------------------------------------------------------------------------
   InitializeWizard: executado uma vez ao abrir o wizard (tambem no /SILENT)
   -------------------------------------------------------------------------- }
@@ -426,6 +442,10 @@ procedure InitializeWizard;
 var
   ParamDom: String;
 begin
+  { 2.0.3 (item 44): numa atualizacao de estacao 2.0, os valores vem do config atual }
+  LerConfigAtual;
+  CfgSetRole := Param('DBROLE', CfgSetRole);
+
   { --- PAGINA 1: Dominio --- }
   PageDominio := CreateInputOptionPage(
     wpWelcome,
@@ -437,7 +457,10 @@ begin
   PageDominio.Add('Non-Alpha  (banco mes_nonalpha)');
   PageDominio.Add('Alpha  (banco mes_alpha)');
 
-  ParamDom := UpperCase(Trim(Param('DOMINIO', 'NONALPHA')));
+  if (Pos('alpha', LowerCase(CfgName)) > 0) and (Pos('nonalpha', LowerCase(CfgName)) = 0) then
+    ParamDom := UpperCase(Trim(Param('DOMINIO', 'ALPHA')))
+  else
+    ParamDom := UpperCase(Trim(Param('DOMINIO', 'NONALPHA')));
   StringChangeEx(ParamDom, '-', '', True);
   DominioInvalido := (ParamDom <> 'NONALPHA') and (ParamDom <> 'ALPHA');
   if ParamDom = 'ALPHA' then
@@ -463,10 +486,13 @@ begin
     no GitHub. O tecnico digita na instalacao ou passa /DBPASS no silencioso. }
   NomeSugerido := 'mes_' + Dominio;
   UserSugerido := 'mes_client_' + Dominio;
-  PageBanco.Values[0] := Param('DBHOST', '172.21.70.184');
-  PageBanco.Values[1] := Param('DBPORT', '5432');
-  PageBanco.Values[2] := Param('DBNAME', NomeSugerido);
-  PageBanco.Values[3] := Param('DBUSER', UserSugerido);
+  PageBanco.Values[0] := Param('DBHOST', ValorOu(CfgHost, '172.21.70.184'));
+  PageBanco.Values[1] := Param('DBPORT', ValorOu(CfgPort, '5432'));
+  PageBanco.Values[2] := Param('DBNAME', ValorOu(CfgName, NomeSugerido));
+  PageBanco.Values[3] := Param('DBUSER', ValorOu(CfgUser, UserSugerido));
+  if AtualizacaoCfg20 then
+    PageBanco.Description := 'ATUALIZAÇÃO: valores lidos do config.yaml atual desta estação. ' +
+                             'Mantenha, a não ser que o servidor tenha mudado.';
 
   { --- PAGINA 3: Senha --- }
   PageSenha := CreateInputQueryPage(
@@ -476,11 +502,16 @@ begin
     'A senha é gravada apenas no arquivo .env desta estação, nunca no config.yaml. ' +
     'Peça à engenharia; não anote em papel nem em arquivo.');
   PageSenha.Add('Senha do banco:', True);  { True = oculta a senha }
-  PageSenha.Values[0] := Param('DBPASS', '');
+  PageSenha.Values[0] := Param('DBPASS', CfgSenha);
+  if AtualizacaoCfg20 and (CfgSenha <> '') then
+    PageSenha.Description := 'ATUALIZAÇÃO: senha lida do .env atual. Ela é testada no servidor ao avançar.';
+
+  { --- PAGINA 4 (2.0.3): estacao do cadastro do servidor --- }
+  CriarPaginaEstacao(PageSenha.ID);
 
   { --- PAGINA 4: Primeira fonte (opcional) --- }
   PageFonte := CreateInputQueryPage(
-    PageSenha.ID,
+    PageEstacao.ID,
     'Fonte de log deste PC (opcional)',
     'Qual log do equipamento este PC envia ao banco',
     'Códigos do servidor de gerenciamento. Vazio = vincular depois na tela FONTES DESTE PC.');
@@ -539,6 +570,14 @@ begin
       Result := False;
       Exit;
     end;
+    { 2.0.3: le o cadastro do servidor e testa banco/usuario/senha }
+    Result := DepoisDaSenha;
+    Exit;
+  end;
+
+  if CurPageID = PageEstacao.ID then begin
+    Result := ReservarSlot;
+    Exit;
   end;
 
   if CurPageID = PageFonte.ID then begin
@@ -559,6 +598,14 @@ begin
         Exit;
       end;
   end;
+end;
+
+
+{ 2.0.3: pula a pagina da estacao sem catalogo e as paginas de fonte numa
+  atualizacao 2.0 (o config.yaml e' preservado) }
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := PularPaginaEstacao(PageID);
 end;
 
 
@@ -669,9 +716,14 @@ end;
 procedure GenerateConfig;
 var
   ConfigPath, EnvPath, Content, Vinculos: String;
-  Estacao, Fonte, Pasta, SyncDest, OpMode: String;
+  Estacao, Fonte, Pasta, SyncDest, OpMode, RoleYaml: String;
 begin
   ConfigPath := ExpandConstant('{app}\config.yaml');
+  { /DBROLE= (homologacao: mes_homolog -> SET ROLE mes_grp_client) }
+  if Trim(CfgSetRole) <> '' then
+    RoleYaml := '  set_role: ' + Trim(CfgSetRole) + #13#10
+  else
+    RoleYaml := '';
   EnvPath    := ExpandConstant('{app}\.env');
 
   { --- .env: sempre reescrito, e' onde a senha do banco mora --- }
@@ -715,6 +767,7 @@ begin
     '  port: '     + Trim(PageBanco.Values[1])               + #13#10 +
     '  name: '     + Trim(PageBanco.Values[2])               + #13#10 +
     '  user: '     + Trim(PageBanco.Values[3])               + #13#10 +
+    RoleYaml                                                 +
     '  password: ${MES_DB_PASSWORD}'                         + #13#10 +
     ''                                                       + #13#10 +
     'cliente:'                                               + #13#10 +
@@ -862,6 +915,10 @@ begin
   else
     FonteTxt := UpperCase(Trim(PageFonte.Values[0])) + ' / ' + UpperCase(Trim(PageFonte.Values[1])) +
                 '  <-  ' + Trim(PageFonte.Values[2]);
+  if (SlotReservado <> '') and (SlotReservado = UpperCase(Trim(PageFonte.Values[0]))) then
+    FonteTxt := FonteTxt + NewLine + Space + '              (estação reservada no servidor para o PC ' + CatHost + ')';
+  if AtualizacaoCfg20 then
+    FonteTxt := '(mantidas as do config.yaml atual)';
 
   if Trim(PageFonte.Values[3]) = '' then
     SyncTxt := '(desligada)'
